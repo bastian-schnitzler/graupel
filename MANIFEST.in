@@ -1,0 +1,13 @@
+recursive-include graupel/react *
+recursive-include graupel/models *
+recursive-include graupel/icons *
+recursive-include react/src *.ts *.tsx *.css *.png *.svg
+recursive-include react/public *.txt *.svg
+include react/LICENSE.md
+include react/index.html
+include react/package.json
+include react/pnpm-lock.yaml
+include README.md
+include LICENSE
+recursive-include LICENSES *.txt
+include THIRD_PARTY_LICENSES.md

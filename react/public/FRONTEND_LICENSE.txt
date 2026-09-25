@@ -1,0 +1,16 @@
+Graupel frontend licensing
+==========================
+
+The project-authored portions of this compiled React frontend are licensed
+under the Mozilla Public License Version 2.0 (MPL-2.0). The corresponding
+Source Code Form is available in the react/ directory of the Graupel source
+distribution and at:
+
+https://github.com/bastian-schnitzler/graupel/tree/main/react
+
+The complete MPL 2.0 text is distributed in the Python package metadata under
+LICENSES/MPL-2.0.txt and is available at https://mozilla.org/MPL/2.0/.
+
+Icons and images are licensed under GPL-3.0-or-later. Bundled third-party code
+retains its original license; see THIRD_PARTY_LICENSES.md in the Python package
+metadata.

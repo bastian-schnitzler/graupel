@@ -1,0 +1,15 @@
+venv/
+.pytest_cache/
+__pycache__/
+*.pyc
+.env
+.venv
+uv.lock
+__pycache__
+react/node_modules
+log/
+*.db
+build/
+dist/
+*.egg-info/
+graupel/react
