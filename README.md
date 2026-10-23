@@ -19,16 +19,17 @@ Interactive maps use [Maptoolkit](https://www.maptoolkit.com/) and [MapLibre](ht
 
 ## Features
 
-* Custom model chains for short-, medium-, and long-range forecasts
-* Multiple numerical weather prediction models
-* Detailed alpine meteograms
-* Vertical cloud profile visualization
-* Temperature, precipitation, wind, cloud, CAPE/CIN and other weather parameters
-* Interactive time-range zoom
-* Configurable locations and forecast presets
-* Interactive maps
-* Local desktop application
-* Local configuration and forecast storage
+* Normal mode: pick a location, get a good meteogram; the model chain is chosen automatically for the region
+* Power mode: custom model chains for short-, medium-, and long-range forecasts, with **Auto** as a starting point
+* About 50 numerical weather prediction models from Open-Meteo
+* Detailed alpine meteograms with a vertical cloud profile
+* Temperature, precipitation and snow, wind, cloud, CAPE/CIN and other weather parameters
+* Configurable meteogram layouts (power mode)
+* Interactive time-range zoom and day ranges (4/7/10/14 days)
+* Interactive maps for picking a location
+* Copy the meteogram as a PNG image
+* Optional local forecast archive with a viewer for past forecasts (power mode)
+* Local desktop application with local configuration storage
 
 
 # Graupel
@@ -136,59 +137,53 @@ Graupel allows you to "stack" weather models on top of each other, e.g. in a cha
 
 The longest models have a horizon of more than 14 days, giving you an effective visual forecast of two weeks. Be aware though, that usually a prediction of longer than a week can have a big uncertainty and should merely be seen as a trend.
 
-## Overview
+## Normal and power mode
 
-The app has two panes between which you can switch:
+Graupel has two modes. The **Power mode** switch in the header (next to the logo) changes between them at any time;
+switching never deletes configurations, layouts or archived forecasts.
 
-1. meteo, showing the actual meteogram
-2. config, configure model chains for weather data
+* **Normal mode** (default for new installations): choose a location and you get a meteogram. Graupel picks the region
+  of the location and a suitable chain of weather models for it; the header shows the region and the chain as text.
+  Models without data at the location are skipped and the next model takes over.
+* **Power mode**: everything for tuning the forecast. You select one of your saved configurations (or **Auto**, the
+  chain normal mode would use), see the model chain cards above the meteogram, can drag the boundaries between models,
+  and open the **Config** pane and the **History** of archived forecasts.
 
-A configuration holds two model chains (e.g. a stack of models from smaller to bigger horizon, see Introduction to weather models), one for the basic meteo data (temperature, precipitation, wind) and one for a detailed height profile of clouds (because the best models for meteo data do not always offer detailed cloud profile).
+Installations upgraded from 0.1.x with own configurations start in power mode once; your configurations are kept and a
+backup of the old database is written next to it (`meteogram.db.0.1.0.bak`).
 
-You select a configuration and a location and the program will construct a meteogram from the weather data received from OpenMeteo.
+## Meteo pane
 
-### Meteogram pane
+### Header
 
-#### Header
+1. The configuration selectbox (power mode) or the region and model chain (normal mode).
+2. The location selector on the right. Click inside the textbox and begin typing the name of a place; an autocomplete
+   shows matching places. The arrow next to the textbox lists the places you used most. Alternatively click on the
+   small map to open it in fullscreen and select a location there.
 
-In the header you have
+After selecting a location you will see its coordinates and height above sea level below the textbox. Selecting a new
+location or configuration reloads the meteogram; the refresh button next to the textbox forces a reload.
 
-1. a configuration selectbox in the lower left corner
-2. a location selector in the right header part
+### Body
 
-Click inside the location selector's textbox and begin typing the name of a place. An autocomplete will show you known places starting with your typing.
+1. In power mode: the model chain for the basic meteo data and the model chain for the cloud profile, as cards with
+   run time, usable hours and resolution. Drag the boundary between two cards to change which model covers which
+   hours (only for the current session).
+2. The meteogram itself. Hover to see the values, use the mouse wheel to zoom the time axis, or the buttons 4/7/10/14/All
+   to pick a day range.
 
-Alternatively you can click on the map to open it in fullscreen an select a location by clicking on the map.
+## Config pane (power mode)
 
-After selecting a location you will see its coordinates and height as meters above see level below the textbox
-
-You can change the configuration, and therefore the models which will supply the data for your meteogram, by selecting one in the dropdown.
-
-Selecting a new location or configuration will automatically reload the meteogram. You can force it to reload by clicking the refresh button next to the textbox.
-
-#### Body
-
-Below the header you will find
-
-1. The model chain for basic meteo data
-2. The model chain for the cloud profile
-3. The meteogram itself
+* **Basic:** the data folder (where the database lives) and the forecast archive: off by default, or kept for 7, 30,
+  90 or 365 days or forever.
+* **Model chains:** your configurations. Each has a name, its own location, a layout and two model chains: one for the
+  basic meteo data (temperature, precipitation, wind) and one for the detailed height profile of clouds, because the
+  best models for meteo data do not always offer a cloud profile. "Start from auto configuration" fills the chains
+  with the automatic chain of a region. Changes are saved automatically.
+* **Meteogram:** the layout library. A layout defines the drawing areas of the meteogram and which quantities they show;
+  edit it with a live preview.
 
 ## Share forecast
 
-On Windows, make a screenshot of the meteogram area via the snipping tool or greenshot and copy it into email or messenger app.
-
-On Linux, the easiest way depends on your desktop environment:
-
-- GNOME: press `Shift + Print Screen` and drag over the area you want. On newer GNOME versions, just `Print Screen` opens the screenshot UI where you can choose a rectangular region.
-- KDE Plasma: press `Meta + Shift + S` to select a rectangular region with Spectacle.
-- XFCE: usually `Shift + Print Screen` for selecting a region.
-
-On macOS, select part of the screen with:
-
-```
-⌘ Command + ⇧ Shift + 4
-```
-
-Then drag over the area you want to capture.
-Press Esc to cancel.
+Click the copy button at the meteogram to copy it as a PNG image to the clipboard, then paste it into an email or a
+messenger app. The image contains the location and the time it was created.

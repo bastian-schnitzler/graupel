@@ -1,4 +1,9 @@
-import type { WeatherModel, VerticalCloudTransition } from '../types';
+import type {
+  ModelMetadata,
+  RunSegment,
+  WeatherModel,
+  VerticalCloudTransition,
+} from '../types';
 import type { TimelineScale } from './timeline';
 import {
   HOUR_MS,
@@ -7,6 +12,7 @@ import {
   normalizeTimestamp,
 } from './timeline';
 import { getPreviousLocalMidnight, type TimeRange } from './meteogramZoom';
+import { getMetaForModel } from '../components/modelChain/modelChainBuilderUtils';
 
 export interface DayGroupItem {
   dayKey: string;
@@ -17,8 +23,21 @@ export interface DayGroupItem {
 
 export interface HeaderModelSegment {
   modelName: string;
+  /** Header text: model name plus run, e.g. "ECMWF IFS (10/06Z06)". */
+  label: string;
+  /** Same with the catalogue nickname (`short_name`); null without one. */
+  shortLabel: string | null;
   startX: number;
   endX: number;
+}
+
+/** Formats a run start as UTC "MM/DDZhh", e.g. "10/06Z06". */
+export function formatRunLabel(runInitTime: string): string | null {
+  const ms = normalizeTimestamp(runInitTime);
+  if (isNaN(ms)) return null;
+  const date = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(date.getUTCMonth() + 1)}/${pad(date.getUTCDate())}Z${pad(date.getUTCHours())}`;
 }
 
 export interface CloudTransitionWithX extends VerticalCloudTransition {
@@ -136,12 +155,29 @@ export function calculateZeroSpanModelNames(
 }
 
 /**
+ * Returns the run that delivers a model's value at `timestampMs`: each hour
+ * belongs to the run segment covering it (newest first, open ends null).
+ */
+export function findRunAt(
+  runSegments: RunSegment[] | undefined,
+  timestampMs: number,
+): RunSegment | undefined {
+  return runSegments?.find(
+    (run) =>
+      (!run.valid_from || normalizeTimestamp(run.valid_from) <= timestampMs) &&
+      (!run.valid_until || timestampMs < normalizeTimestamp(run.valid_until)),
+  );
+}
+
+/**
  * Calculates startX and endX coordinates for each active weather model in the header row.
  */
 export function calculateModelSegments(
   modelChain: WeatherModel[],
   forecastStartTime: string | undefined,
   timeline: TimelineScale,
+  runSegmentsByModel?: Record<string, RunSegment[] | undefined>,
+  availableModels?: Record<string, ModelMetadata>,
 ): HeaderModelSegment[] {
   const segments: HeaderModelSegment[] = [];
 
@@ -164,11 +200,45 @@ export function calculateModelSegments(
     );
     const segmentEndMs = Math.min(timeline.endMs, configuredEndMs);
     if (segmentEndMs > segmentStartMs) {
-      segments.push({
-        modelName: model.name,
-        startX: timeline.timestampToX(segmentStartMs),
-        endX: timeline.timestampToX(segmentEndMs),
+      // Open-Meteo mixes runs: one header (and boundary line) per run.
+      const runs = runSegmentsByModel?.[model.name] ?? [];
+      let pieceStartMs = segmentStartMs;
+      const pieces: { endMs: number; run?: string }[] = [];
+      runs.forEach((run, idx) => {
+        const runEndMs =
+          run.valid_until && idx < runs.length - 1
+            ? normalizeTimestamp(run.valid_until)
+            : Infinity;
+        const pieceEndMs = Math.min(segmentEndMs, runEndMs);
+        if (pieceEndMs > pieceStartMs) {
+          pieces.push({ endMs: pieceEndMs, run: run.run_init_time });
+          pieceStartMs = pieceEndMs;
+        }
       });
+      if (pieces.length === 0 || pieceStartMs < segmentEndMs) {
+        pieces.push({ endMs: segmentEndMs });
+      }
+      let startMs = segmentStartMs;
+      // Only split series name their runs; a single run stays plain.
+      const isSplit = pieces.filter((piece) => piece.run).length > 1;
+      const shortName =
+        model.short_name ?? getMetaForModel(model, availableModels)?.short_name;
+      for (const piece of pieces) {
+        const runLabel =
+          isSplit && piece.run ? formatRunLabel(piece.run) : null;
+        segments.push({
+          modelName: model.name,
+          label: runLabel ? `${model.name} (${runLabel})` : model.name,
+          shortLabel: shortName
+            ? runLabel
+              ? `${shortName} (${runLabel})`
+              : shortName
+            : null,
+          startX: timeline.timestampToX(startMs),
+          endX: timeline.timestampToX(piece.endMs),
+        });
+        startMs = piece.endMs;
+      }
     }
     segmentStartMs = Math.max(segmentStartMs, segmentEndMs);
     if (segmentStartMs >= timeline.endMs) break;

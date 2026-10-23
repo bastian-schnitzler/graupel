@@ -8,7 +8,8 @@ from graupel.resources import frontend_directory, model_resource
 
 def test_model_catalogs_are_package_resources():
     assert model_resource("model_catalogue.json").is_file()
-    assert model_resource("model_catalog.json").is_file()
+    assert model_resource("model_domains.json").is_file()
+    assert model_resource("regions.json").is_file()
     assert len(_load_raw_catalog_file()) >= 30
 
 

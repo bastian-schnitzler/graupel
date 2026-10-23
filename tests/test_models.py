@@ -128,14 +128,14 @@ def test_meteogram_config_dual_chains_and_cloud_migration():
     loc = Location(name="Berlin", latitude=52.52, longitude=13.405)
     main_models = [WeatherModel(name="ICON-D2", max_forecast_horizon_hours=48)]
 
-    # 1. Legacy config without cloud_model_chain gets default ECMWF IFS 0.25° (13 levels, 345h)
+    # 1. Legacy config without cloud_model_chain gets default ECMWF IFS 0.25° (13 levels, 360h)
     legacy_cfg = MeteogramConfig(
         name="Legacy", location=loc, model_chain=main_models
     )
     assert legacy_cfg.cloud_model_chain is not None
     assert len(legacy_cfg.cloud_model_chain) == 1
     assert "IFS 0.25" in legacy_cfg.cloud_model_chain[0].name
-    assert legacy_cfg.cloud_model_chain[0].max_forecast_horizon_hours == 345
+    assert legacy_cfg.cloud_model_chain[0].max_forecast_horizon_hours == 360
 
     # 2. Explicit empty cloud chain remains empty (user disabled cloud view)
     empty_cloud_cfg = MeteogramConfig(

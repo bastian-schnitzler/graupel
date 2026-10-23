@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   resolveAppBoot,
-  mergeSavedConfigLocation,
   filterMeteogramConfigs,
   resolveHeaderLocationChange,
 } from "./App.logic";
@@ -54,59 +53,6 @@ describe("App.logic unit tests", () => {
     });
   });
 
-  describe("mergeSavedConfigLocation", () => {
-    it("preserves updatedConfig elevation when saved location elevation is undefined", () => {
-      const saved: MeteogramConfig = {
-        id: "cfg-1",
-        name: "Berlin",
-        location: { name: "Berlin", latitude: 52.52, longitude: 13.405 },
-        model_chain: [],
-      };
-      const updated: MeteogramConfig = {
-        id: "cfg-1",
-        name: "Berlin",
-        location: {
-          name: "Berlin",
-          latitude: 52.52,
-          longitude: 13.405,
-          elevation: 120,
-        },
-        model_chain: [],
-      };
-
-      const merged = mergeSavedConfigLocation(saved, updated);
-      expect(merged.location.elevation).toBe(120);
-    });
-
-    it("uses saved location elevation when present", () => {
-      const saved: MeteogramConfig = {
-        id: "cfg-1",
-        name: "Berlin",
-        location: {
-          name: "Berlin",
-          latitude: 52.52,
-          longitude: 13.405,
-          elevation: 150,
-        },
-        model_chain: [],
-      };
-      const updated: MeteogramConfig = {
-        id: "cfg-1",
-        name: "Berlin",
-        location: {
-          name: "Berlin",
-          latitude: 52.52,
-          longitude: 13.405,
-          elevation: 120,
-        },
-        model_chain: [],
-      };
-
-      const merged = mergeSavedConfigLocation(saved, updated);
-      expect(merged.location.elevation).toBe(150);
-    });
-  });
-
   describe("filterMeteogramConfigs", () => {
     it("filters out configs with empty or missing model chains", () => {
       const result = filterMeteogramConfigs([
@@ -125,14 +71,10 @@ describe("App.logic unit tests", () => {
       longitude: 11.58,
     };
 
-    it("returns updatedConfigToSave in config tab", () => {
-      const outcome = resolveHeaderLocationChange(
-        "config",
-        configWithModels,
-        newLoc,
-      );
-      expect(outcome.updatedConfigToSave?.location).toEqual(newLoc);
-      expect(outcome.sessionLocationOverride).toBeUndefined();
+    it("changes nothing in config tab (header field disabled, #175)", () => {
+      expect(
+        resolveHeaderLocationChange("config", configWithModels, newLoc),
+      ).toEqual({});
     });
 
     it("returns sessionLocationOverride and fetch args in meteogram tab", () => {
@@ -146,7 +88,6 @@ describe("App.logic unit tests", () => {
         loc: newLoc,
         configId: "cfg-1",
       });
-      expect(outcome.updatedConfigToSave).toBeUndefined();
     });
   });
 });

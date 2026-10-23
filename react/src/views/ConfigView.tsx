@@ -5,7 +5,13 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
-import type { MeteogramConfig, WeatherModel } from "../types";
+import type {
+  AutoChainInfo,
+  Location,
+  MeteogramConfig,
+  StoredLayout,
+  WeatherModel,
+} from "../types";
 import { ConfigSidebar } from "./config/ConfigSidebar";
 import { ConfigEditor } from "./config/ConfigEditor";
 import { apiService } from "../services/apiService";
@@ -17,16 +23,38 @@ import {
   calculateInsertIndex,
   createNewConfigurationPayload,
   createDuplicateConfigurationPayload,
+  createAutoConfigurationPayload,
   buildModelMap,
   findInitialActiveConfig,
   getNextActiveConfigAfterDelete,
   reorderConfigurationsList,
 } from "./config/configFactories";
+import { CONFIG_TABS, type ConfigTab } from "./config/configTabs";
+import { MeteogramLayoutsPanel } from "./config/MeteogramLayoutsPanel";
+import { BasicSettingsPanel } from "./config/BasicSettingsPanel";
+import { AutoConfigDialog } from "./config/AutoConfigDialog";
+import { formatAutoRegion } from "../utils/autoChain";
+import type { ChartLayout } from "../layouts/types";
+
+export type { ConfigTab };
 
 interface ConfigViewProps {
+  activeTab?: ConfigTab;
+  onTabChange?: (tab: ConfigTab) => void;
   selectedConfigId: string | null;
   onSelectConfig: (config: MeteogramConfig) => void;
+  /** Meteogram view location, for "Start from auto configuration". */
+  currentLocation?: Location;
   onConfigsUpdated?: () => void;
+  /** Called after the meteogram configurations (layouts) changed. */
+  onLayoutsUpdated?: () => void;
+  /** Live preview of an edited layout with the current forecast (#142). */
+  renderLayoutPreview?: (
+    layout: ChartLayout,
+    fallbackLayoutId: string,
+  ) => React.ReactNode;
+  /** Called after the app switched to a new data folder (Basic tab). */
+  onDataDirChanged?: () => void;
   onSaveStatusChange?: (
     status: "saved" | "saving" | "error" | null,
     error?: string | null,
@@ -34,9 +62,15 @@ interface ConfigViewProps {
 }
 
 export const ConfigView: React.FC<ConfigViewProps> = ({
+  activeTab: propActiveTab,
+  onTabChange,
   selectedConfigId,
   onSelectConfig,
+  currentLocation,
   onConfigsUpdated,
+  onLayoutsUpdated,
+  renderLayoutPreview,
+  onDataDirChanged,
   onSaveStatusChange,
 }) => {
   const [configs, setConfigs] = useState<MeteogramConfig[]>([]);
@@ -47,6 +81,18 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     null,
   );
   const [loading, setLoading] = useState<boolean>(true);
+  const [autoDialogOpen, setAutoDialogOpen] = useState(false);
+  // Auto chain region of the active configuration's location (info only).
+  const [autoRegion, setAutoRegion] = useState<{
+    key: string;
+    label: string;
+  } | null>(null);
+  const [internalTab, setInternalTab] = useState<ConfigTab>("chains");
+  const activeTab = propActiveTab ?? internalTab;
+  const selectTab = (tab: ConfigTab) => {
+    setInternalTab(tab);
+    onTabChange?.(tab);
+  };
 
   // Status feedback state
   const [saveStatus, setSaveStatus] = useState<
@@ -77,6 +123,61 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     () => filterCloudCompatibleModels(availableModels),
     [availableModels],
   );
+
+  // Layout library for the configuration's layout selector (#199).
+  const [layoutLibrary, setLayoutLibrary] = useState<StoredLayout[]>([]);
+  const loadLayoutLibrary = useCallback(
+    () =>
+      apiService
+        .getLayouts()
+        .then((layouts) => {
+          if (isMountedRef.current) setLayoutLibrary(layouts);
+        })
+        .catch((e: unknown) => {
+          console.error("Failed to load meteogram configurations:", e);
+        }),
+    [],
+  );
+  useEffect(() => {
+    void loadLayoutLibrary();
+  }, [loadLayoutLibrary]);
+
+  const activeLocation = activeConfig?.location;
+  const activeLat = activeLocation?.latitude;
+  const activeLon = activeLocation?.longitude;
+  const activeElevation = activeLocation?.elevation;
+  const activeLocationKey =
+    activeLat !== undefined && activeLon !== undefined
+      ? `${activeLat},${activeLon}`
+      : "";
+  // Re-resolve only when the coordinates change, not on every edit.
+  useEffect(() => {
+    if (activeLat === undefined || activeLon === undefined) return;
+    let active = true;
+    apiService
+      .resolveAutoChain({
+        name: "",
+        latitude: activeLat,
+        longitude: activeLon,
+        elevation: activeElevation,
+      })
+      .then((info) => {
+        if (active) {
+          setAutoRegion({
+            key: `${activeLat},${activeLon}`,
+            label: formatAutoRegion(info),
+          });
+        }
+      })
+      .catch((e) => console.error("Failed to resolve auto region:", e));
+    return () => {
+      active = false;
+    };
+  }, [activeLat, activeLon, activeElevation]);
+  const autoRegionLabel =
+    autoRegion && autoRegion.key === activeLocationKey
+      ? autoRegion.label
+      : undefined;
 
   // Validation function
   const isValidConfig = useCallback(
@@ -300,6 +401,38 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     }
   };
 
+  const autoLocation = currentLocation || activeConfig?.location;
+
+  // "Start from auto configuration" (system.md §6.5): a region's chains, or the
+  // chains the current location resolves to, at the current location.
+  const handleCreateAutoConfig = async (
+    regionId: string | null,
+    chain?: AutoChainInfo,
+  ) => {
+    if (!autoLocation) return;
+    const info = chain
+      ? chain
+      : regionId
+        ? await apiService.getRegionChains(regionId)
+        : await apiService.resolveAutoChain(autoLocation);
+    if (!info) throw new Error(`Unknown region ${regionId}`);
+    if (activeConfig?.id) {
+      flushPendingSave(activeConfig.id);
+    }
+    const insertIdx = calculateInsertIndex(configs, activeConfig?.id);
+    const payload = createAutoConfigurationPayload(configs, autoLocation, info);
+    const persisted = await apiService.createConfiguration(payload, insertIdx);
+    const updatedList = [...configs];
+    updatedList.splice(insertIdx, 0, persisted);
+    setConfigs(updatedList);
+    setActiveConfig(persisted);
+    setSaveStatus("saved");
+    setSaveError(null);
+    setAutoDialogOpen(false);
+    onSelectConfig(persisted);
+    if (onConfigsUpdated) onConfigsUpdated();
+  };
+
   const handleDelete = async () => {
     if (!activeConfig || !activeConfig.id) return;
     if (configs.length <= 1) {
@@ -386,6 +519,29 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     updateActiveConfigState(updated, 400);
   };
 
+  // A new place clears the display name and shows at once (#175, #164).
+  const handleLocationChange = (location: Location) => {
+    if (!activeConfig) return;
+    updateActiveConfigState(
+      { ...activeConfig, location, location_name_override: null },
+      0,
+    );
+  };
+
+  const handleLocationNameOverrideChange = (name: string) => {
+    if (!activeConfig) return;
+    updateActiveConfigState(
+      { ...activeConfig, location_name_override: name || null },
+      400,
+    );
+  };
+
+  const flushActivePendingSave = () => {
+    if (activeConfig?.id && pendingSaves.current[activeConfig.id]) {
+      flushPendingSave(activeConfig.id);
+    }
+  };
+
   const handleModelChainChange = (
     newChain: WeatherModel[],
     instant = false,
@@ -429,6 +585,54 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     }
   };
 
+  const handleConfigLayoutChange = (
+    configId: string,
+    layoutId: string | null,
+  ) => {
+    const target = configs.find((c) => c.id === configId);
+    if (!target) return;
+    const updated = { ...target, layout_id: layoutId };
+    if (activeConfigRef.current?.id === configId) {
+      updateActiveConfigState(updated, 0);
+    } else {
+      setConfigs((prev) => prev.map((c) => (c.id === configId ? updated : c)));
+      scheduleSave(updated, 0);
+    }
+  };
+
+  // Deleting a layout resets the configurations that used it (backend).
+  const handleLayoutsUpdated = async () => {
+    void loadLayoutLibrary();
+    try {
+      const list = await apiService.getConfigurations();
+      const layoutIds = new Map(list.map((c) => [c.id, c.layout_id ?? null]));
+      const patch = (c: MeteogramConfig): MeteogramConfig =>
+        layoutIds.has(c.id) && (c.layout_id ?? null) !== layoutIds.get(c.id)
+          ? { ...c, layout_id: layoutIds.get(c.id) }
+          : c;
+      setConfigs((prev) => prev.map(patch));
+      const active = activeConfigRef.current;
+      if (active) {
+        const patched = patch(active);
+        if (patched !== active) {
+          activeConfigRef.current = patched;
+          setActiveConfig(patched);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to reload configurations:", e);
+    }
+    onLayoutsUpdated?.();
+  };
+
+  const handleLayoutSaveStatus = useCallback(
+    (status: "saved" | "saving" | "error" | null, error?: string | null) => {
+      setSaveStatus(status);
+      setSaveError(error ?? null);
+    },
+    [],
+  );
+
   const handleModelChainInstantCommit = () => {
     const currentActive = activeConfigRef.current;
     if (!currentActive) return;
@@ -446,31 +650,81 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   }
 
   return (
-    <div className="view-container config-view">
-      <ConfigSidebar
-        configs={configs}
-        activeConfigId={activeConfig?.id || null}
-        onSelectConfig={handleSelectConfig}
-        onCreateConfig={handleCreateNewConfig}
-        onDuplicateConfig={handleDuplicate}
-        onDeleteConfig={handleDelete}
-        onReorderConfigs={handleReorderConfigs}
-      />
+    <div className="view-container config-view-root">
+      <div className="config-tabs" role="tablist" aria-label="Configuration">
+        {CONFIG_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            id={`config-tab-${tab.id}`}
+            aria-selected={activeTab === tab.id}
+            aria-controls="config-tab-panel"
+            className={`config-tab ${activeTab === tab.id ? "active" : ""}`}
+            onClick={() => selectTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {activeTab === "chains" ? (
+        <div
+          className="config-view"
+          id="config-tab-panel"
+          role="tabpanel"
+          aria-labelledby="config-tab-chains"
+        >
+          <ConfigSidebar
+            configs={configs}
+            activeConfigId={activeConfig?.id || null}
+            onSelectConfig={handleSelectConfig}
+            onCreateConfig={handleCreateNewConfig}
+            onDuplicateConfig={handleDuplicate}
+            onDeleteConfig={handleDelete}
+            onStartFromAuto={
+              autoLocation ? () => setAutoDialogOpen(true) : undefined
+            }
+            onReorderConfigs={handleReorderConfigs}
+          />
 
-      <ConfigEditor
-        activeConfig={activeConfig}
-        availableModels={availableModels}
-        cloudAvailableModels={cloudAvailableModels}
-        onNameChange={handleNameChange}
-        onNameBlur={() => {
-          if (activeConfig?.id && pendingSaves.current[activeConfig.id]) {
-            flushPendingSave(activeConfig.id);
-          }
-        }}
-        onMainModelChainChange={handleModelChainChange}
-        onCloudModelChainChange={handleCloudModelChainChange}
-        onModelChainInstantCommit={handleModelChainInstantCommit}
-      />
+          <ConfigEditor
+            activeConfig={activeConfig}
+            availableModels={availableModels}
+            cloudAvailableModels={cloudAvailableModels}
+            onNameChange={handleNameChange}
+            onNameBlur={flushActivePendingSave}
+            onLocationChange={handleLocationChange}
+            onLocationNameOverrideChange={handleLocationNameOverrideChange}
+            onLocationNameOverrideBlur={flushActivePendingSave}
+            onMainModelChainChange={handleModelChainChange}
+            onCloudModelChainChange={handleCloudModelChainChange}
+            onModelChainInstantCommit={handleModelChainInstantCommit}
+            autoRegionLabel={autoRegionLabel}
+            layouts={layoutLibrary}
+            onLayoutChange={(layoutId) => {
+              if (activeConfig?.id) {
+                handleConfigLayoutChange(activeConfig.id, layoutId);
+              }
+            }}
+          />
+          {autoDialogOpen && autoLocation && (
+            <AutoConfigDialog
+              currentLocation={autoLocation}
+              onCreate={handleCreateAutoConfig}
+              onCancel={() => setAutoDialogOpen(false)}
+            />
+          )}
+        </div>
+      ) : activeTab === "meteogram" ? (
+        <MeteogramLayoutsPanel
+          configs={configs}
+          onLayoutsUpdated={handleLayoutsUpdated}
+          onSaveStatusChange={handleLayoutSaveStatus}
+          renderPreview={renderLayoutPreview}
+        />
+      ) : (
+        <BasicSettingsPanel onDataDirChanged={onDataDirChanged} />
+      )}
     </div>
   );
 };

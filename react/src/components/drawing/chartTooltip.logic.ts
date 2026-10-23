@@ -55,3 +55,35 @@ export function formatTooltipHeaderDate(
     });
   }
 }
+
+// Quantities with their own popup rows (or no popup value at all).
+const GROUPED_TOOLTIP_QUANTITIES = new Set([
+  "temperature",
+  "apparent_temperature",
+  "wind_speed",
+  "wind_gusts",
+  "wind_direction",
+  "precipitation_probability",
+  "precipitation",
+  // Derived bars show their sources (precipitation, snowfall) instead.
+  "precipitation_rain_snow",
+  "snowfall_with_rain",
+  "snowfall",
+  "snow_depth",
+  "cape",
+  "convective_inhibition",
+  "lightning_potential",
+  "weather_code",
+  "vertical_cloud_profile",
+]);
+
+/**
+ * Layout quantities without a dedicated popup group, shown as plain
+ * `Label: value unit` rows after the built-in groups.
+ */
+export function getExtraTooltipQuantities(
+  quantities: Set<string> | undefined,
+): string[] {
+  if (!quantities) return [];
+  return [...quantities].filter((id) => !GROUPED_TOOLTIP_QUANTITIES.has(id));
+}

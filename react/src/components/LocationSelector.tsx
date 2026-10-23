@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import type { Location } from "../types";
 import { apiService } from "../services/apiService";
-import { MapPin, X, RefreshCw } from "lucide-react";
+import { ChevronDown, MapPin, X, RefreshCw } from "lucide-react";
 import { FullscreenMapPicker } from "./FullscreenMapPicker";
 import { HeaderMapPreview } from "./HeaderMapPreview";
 import { handleMapAttributionClick } from "../maps/maptoolkit";
@@ -20,6 +20,16 @@ interface LocationSelectorProps {
   onNavigateView?: (view: "meteogram" | "config") => void;
   isFullscreenMapOpen?: boolean;
   onFullscreenMapChange?: (isOpen: boolean) => void;
+  /** Shown in the field instead of the place name (e.g. "INSB", §16.12). */
+  displayName?: string;
+  /** Read only: no search, no map picker (Config view header, #175). */
+  disabled?: boolean;
+  /** Header map preview and fullscreen picker (default on). */
+  showMap?: boolean;
+  placeholder?: string;
+  ariaLabel?: string;
+  /** Refresh shown but unusable (historic forecast, #144). */
+  refreshDisabled?: boolean;
 }
 
 export const LocationSelector: React.FC<LocationSelectorProps> = ({
@@ -31,26 +41,40 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
   onNavigateView,
   isFullscreenMapOpen: propIsFullscreenMapOpen,
   onFullscreenMapChange,
+  displayName,
+  disabled = false,
+  showMap = true,
+  placeholder = "Search location...",
+  ariaLabel = "Search location",
+  refreshDisabled = false,
 }) => {
-  const [searchTerm, setSearchTerm] = useState<string>(location.name || "");
+  const shownName = displayName || location.name || "";
+  const [searchTerm, setSearchTerm] = useState<string>(shownName);
   const [suggestions, setSuggestions] = useState<Location[]>([]);
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [showDropdown, setShowDropdown] = useState<boolean>(false);
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const [fetchedElevation, setFetchedElevation] = useState<number | null>(null);
+  // The drop-down shows the most-used locations, not search results.
+  const [showingHistory, setShowingHistory] = useState<boolean>(false);
 
-  const loadTopLocations = useCallback(async () => {
+  // `showEmpty`: the arrow button keeps the drop-down open with a note
+  // when nothing is stored yet; focusing an empty field does not.
+  const loadTopLocations = useCallback(async (showEmpty = false) => {
     try {
-      const topLocs = await apiService.getMostUsedLocations(10);
+      // Every stored location; the drop-down scrolls (#166).
+      const topLocs = await apiService.getMostUsedLocations();
       if (topLocs && topLocs.length > 0) {
         setSuggestions(topLocs);
         setHighlightedIndex(-1);
+        setShowingHistory(true);
         setShowDropdown(true);
         setSearchError(null);
       } else {
         setSuggestions([]);
-        setShowDropdown(false);
+        setShowingHistory(showEmpty);
+        setShowDropdown(showEmpty);
       }
     } catch {
       setSuggestions([]);
@@ -88,8 +112,8 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
 
   useEffect(() => {
     isUserTypingRef.current = false;
-    setSearchTerm(location.name);
-  }, [location.name]);
+    setSearchTerm(shownName);
+  }, [shownName]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -131,6 +155,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
         const results = await apiService.searchLocations(searchTerm);
         if (searchRequestIdRef.current === currentRequestId) {
           setSuggestions(results);
+          setShowingHistory(false);
           setHighlightedIndex(-1);
           setShowDropdown(true);
         }
@@ -165,18 +190,20 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
 
   // Map listeners retain their opening closure. Keep the displayed
   // location and view current for that listener across React rerenders.
-  const displayedMapStateRef = useRef({ location, currentView });
+  const displayedMapStateRef = useRef({ location, currentView, disabled });
   displayedMapStateRef.current = {
     location: {
       ...location,
       elevation: location.elevation ?? fetchedElevation ?? undefined,
     },
     currentView,
+    disabled,
   };
   const fullscreenInitialLocationRef = useRef<Location | null>(null);
 
   const handleOpenFullscreenMap = () => {
     const displayed = displayedMapStateRef.current;
+    if (displayed.disabled) return;
     const initialLocation = { ...displayed.location };
     fullscreenInitialLocationRef.current = initialLocation;
     fullscreenMapOriginRef.current = displayed.currentView;
@@ -241,6 +268,25 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
     }
   };
 
+  // Arrow button / Alt+ArrowDown (system.md §16.5, #166): most-used locations,
+  // also while the field holds text. A pending search is dropped.
+  const handleOpenHistory = () => {
+    searchRequestIdRef.current++;
+    isUserTypingRef.current = false;
+    setIsSearching(false);
+    setSearchError(null);
+    void loadTopLocations(true);
+  };
+
+  const handleToggleHistory = () => {
+    if (showDropdown && showingHistory) {
+      setShowDropdown(false);
+    } else {
+      handleOpenHistory();
+    }
+    inputRef.current?.focus();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     resolveLocationSelectorKeyDown(e, {
       showDropdown,
@@ -251,6 +297,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
       onResolveAndSelect: handleResolveAndSelect,
       setShowDropdown,
       setHighlightedIndex,
+      onOpenHistory: handleOpenHistory,
     });
   };
 
@@ -265,16 +312,18 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
       ref={containerRef}
       onClickCapture={handleMapAttributionClick}
     >
-      <div
-        className="map-wrapper"
-        onClick={handleOpenFullscreenMap}
-        style={{ cursor: "pointer" }}
-      >
-        <HeaderMapPreview
-          location={location}
-          onOpen={handleOpenFullscreenMap}
-        />
-      </div>
+      {showMap && (
+        <div
+          className="map-wrapper"
+          onClick={handleOpenFullscreenMap}
+          style={{ cursor: disabled ? "default" : "pointer" }}
+        >
+          <HeaderMapPreview
+            location={location}
+            onOpen={handleOpenFullscreenMap}
+          />
+        </div>
+      )}
 
       {isFullscreenMapOpen && (
         <div
@@ -306,7 +355,19 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
       <div className="location-controls-row">
         <div className="search-autocomplete-container">
           <div className="search-input-wrapper">
-            <MapPin size={15} className="location-pin-icon search-icon" />
+            {/* The pin opens the map picker, also without a preview map. */}
+            <button
+              type="button"
+              className="search-icon location-pin-btn"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleOpenFullscreenMap}
+              disabled={disabled}
+              aria-label="Choose location on map"
+              title="Choose location on map"
+              data-testid="location-pin-button"
+            >
+              <MapPin size={15} className="location-pin-icon" />
+            </button>
             <input
               ref={inputRef}
               type="text"
@@ -332,28 +393,24 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
                   setShowDropdown(true);
                 }
               }}
-              placeholder="Search location..."
+              placeholder={placeholder}
               className="search-input text-input"
-              aria-label="Search location"
+              aria-label={ariaLabel}
+              disabled={disabled}
             />
-            {searchTerm && (
-              <button
-                type="button"
-                className="clear-btn"
-                onClick={() => {
-                  isUserTypingRef.current = false;
-                  setSearchTerm("");
-                  setSuggestions([]);
-                  setShowDropdown(false);
-                  setSearchError(null);
-                  void loadTopLocations();
-                  inputRef.current?.focus();
-                }}
-                aria-label="Clear search"
-              >
-                <X size={14} />
-              </button>
-            )}
+            <button
+              type="button"
+              className={`history-btn ${showDropdown && showingHistory ? "open" : ""}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleToggleHistory}
+              disabled={disabled}
+              aria-label="Show most-used locations"
+              aria-expanded={showDropdown && showingHistory}
+              title="Most-used locations (Alt+↓)"
+              data-testid="location-history-button"
+            >
+              <ChevronDown size={15} />
+            </button>
           </div>
 
           {showDropdown && (
@@ -374,6 +431,16 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
               {!isSearching &&
                 !searchError &&
                 suggestions.length === 0 &&
+                showingHistory && (
+                  <li className="dropdown-status empty">
+                    <span>No saved locations yet</span>
+                  </li>
+                )}
+
+              {!isSearching &&
+                !searchError &&
+                suggestions.length === 0 &&
+                !showingHistory &&
                 searchTerm.trim().length >= 2 && (
                   <li className="dropdown-status empty">
                     <span>No locations found</span>
@@ -416,11 +483,31 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
           )}
         </div>
 
+        {/* Clear: own button between the field and refresh (#166). */}
+        <button
+          type="button"
+          className="btn btn-secondary clear-search-btn"
+          disabled={disabled || !searchTerm}
+          onClick={() => {
+            isUserTypingRef.current = false;
+            setSearchTerm("");
+            setSuggestions([]);
+            setShowDropdown(false);
+            setSearchError(null);
+            void loadTopLocations();
+            inputRef.current?.focus();
+          }}
+          aria-label="Clear search"
+          title="Clear search"
+        >
+          <X size={15} />
+        </button>
+
         {onRefreshForecast && (
           <button
             type="button"
             className="btn btn-primary refresh-forecast-btn"
-            disabled={loading}
+            disabled={loading || refreshDisabled}
             onClick={onRefreshForecast}
             title="Refresh Forecast"
             aria-label="Refresh Forecast"

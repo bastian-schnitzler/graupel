@@ -127,7 +127,8 @@ export const ModelChain: React.FC<ModelChainProps> = ({
           data-testid={`border-label-${borderLabel.toLowerCase()}`}
           aria-hidden="true"
         >
-          {borderLabel}
+          {/* A collapsed chain is one line high: only the initial fits. */}
+          {isCollapsed ? borderLabel.charAt(0) : borderLabel}
         </div>
       )}
       {segments.map((segment, idx) => {

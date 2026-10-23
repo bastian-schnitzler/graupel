@@ -7,9 +7,8 @@ from graupel.data.open_meteo import (
     to_open_meteo_model,
     get_catalog_load_status,
     _process_catalog_raw_data,
-    DEFAULT_VARIABLES,
-    CONVECTIVE_VARIABLES,
 )
+from graupel.data.quantities import catalogued_quantities, optional_quantities
 from graupel.data.models import WeatherModel, MeteogramConfig, Location
 from graupel.data.api import MeteogramAPI
 
@@ -74,7 +73,7 @@ def test_complete_catalogue_automated_validation():
         # 7. Supported variables non-empty and containing valid variables
         assert len(m.supported_variables) >= 2, f"Model {m.id} must support at least 2 variables"
         for v in m.supported_variables:
-            assert v in DEFAULT_VARIABLES + CONVECTIVE_VARIABLES, f"Model {m.id} contains unknown supported variable: {v}"
+            assert v in catalogued_quantities(), f"Model {m.id} contains unknown supported variable: {v}"
 
 
 def test_meteoswiss_icon_ch1_vs_ch2_regression():
@@ -261,7 +260,7 @@ def test_catalogue_matches_openapi_yaml_model_count():
 def test_convective_capabilities_are_optional_without_model_warnings():
     catalog = load_catalog(force_refresh=True)
     for model in catalog:
-        assert not set(CONVECTIVE_VARIABLES).intersection(model.missing_variables)
+        assert not set(optional_quantities()).intersection(model.missing_variables)
     icon_d2 = next(m for m in catalog if m.id == "icon_d2")
     icon_eu = next(m for m in catalog if m.id == "icon_eu")
     assert "lightning_potential" in icon_d2.supported_variables

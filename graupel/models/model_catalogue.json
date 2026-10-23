@@ -2,6 +2,7 @@
   {
     "id": "best_match",
     "name": "Best match",
+    "short_name": null,
     "provider": "Open-Meteo",
     "region": "Global",
     "spatial_resolution_km": 2.2,
@@ -45,11 +46,12 @@
   {
     "id": "ecmwf_ifs",
     "name": "ECMWF IFS HRES 9km",
+    "short_name": "IFS HRES",
     "provider": "ECMWF",
     "region": "Global",
     "spatial_resolution_km": 9.0,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 345,
+    "max_forecast_hours": 360,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -71,11 +73,12 @@
   {
     "id": "ecmwf_ifs025",
     "name": "ECMWF IFS 0.25°",
+    "short_name": "IFS",
     "provider": "ECMWF",
     "region": "Global",
     "spatial_resolution_km": 25.0,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 345,
+    "max_forecast_hours": 360,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -110,6 +113,7 @@
   {
     "id": "ecmwf_aifs025_single",
     "name": "ECMWF AIFS 0.25° Single",
+    "short_name": "AIFS",
     "provider": "ECMWF",
     "region": "Global",
     "spatial_resolution_km": 25.0,
@@ -146,11 +150,12 @@
   {
     "id": "cma_grapes_global",
     "name": "CMA GRAPES Global",
+    "short_name": "GRAPES",
     "provider": "CMA",
     "region": "Global",
     "spatial_resolution_km": 25.0,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 240,
+    "max_forecast_hours": 120,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -184,6 +189,7 @@
   {
     "id": "bom_access_global",
     "name": "ACCESS-G",
+    "short_name": null,
     "provider": "BOM",
     "region": "Global",
     "spatial_resolution_km": 12.0,
@@ -208,6 +214,7 @@
   {
     "id": "ncep_gfs_seamless",
     "name": "GFS Seamless",
+    "short_name": "GFS SL",
     "provider": "NOAA",
     "region": "Global",
     "spatial_resolution_km": 13.0,
@@ -279,6 +286,7 @@
   {
     "id": "ncep_gfs_global",
     "name": "GFS Global 0.11°/0.25°",
+    "short_name": "GFS",
     "provider": "NOAA",
     "region": "Global",
     "spatial_resolution_km": 11.0,
@@ -350,11 +358,12 @@
   {
     "id": "ncep_hrrr_conus",
     "name": "HRRR Conus",
+    "short_name": null,
     "provider": "NOAA",
     "region": "North America",
     "spatial_resolution_km": 3.0,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 259,
+    "max_forecast_hours": 48,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -421,11 +430,12 @@
   {
     "id": "ncep_nbm_conus",
     "name": "NBM Conus",
+    "short_name": null,
     "provider": "NOAA",
     "region": "North America",
     "spatial_resolution_km": 2.5,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 259,
+    "max_forecast_hours": 264,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -446,11 +456,12 @@
   {
     "id": "ncep_nam_conus",
     "name": "NAM Conus",
+    "short_name": null,
     "provider": "NOAA",
     "region": "North America",
     "spatial_resolution_km": 12.0,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 84,
+    "max_forecast_hours": 60,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -471,11 +482,12 @@
   {
     "id": "ncep_gfs_graphcast025",
     "name": "GraphCast 0.25°",
+    "short_name": "GraphCast",
     "provider": "NOAA",
     "region": "Global",
     "spatial_resolution_km": 25.0,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 240,
+    "max_forecast_hours": 384,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -540,6 +552,7 @@
   {
     "id": "ncep_aigfs025",
     "name": "AIGFS 0.25°",
+    "short_name": "AIGFS",
     "provider": "NOAA",
     "region": "Global",
     "spatial_resolution_km": 25.0,
@@ -607,11 +620,12 @@
   {
     "id": "ncep_hgefs025_ensemble_mean",
     "name": "HGEFS 0.25° Ensemble Mean",
+    "short_name": "HGEFS Mean",
     "provider": "NOAA",
     "region": "Global",
     "spatial_resolution_km": 25.0,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 384,
+    "max_forecast_hours": 240,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -629,6 +643,7 @@
   {
     "id": "jma_seamless",
     "name": "JMA Seamless",
+    "short_name": "JMA SL",
     "provider": "JMA",
     "region": "Global / Japan",
     "spatial_resolution_km": 5.0,
@@ -668,6 +683,7 @@
   {
     "id": "jma_msm",
     "name": "JMA MSM",
+    "short_name": null,
     "provider": "JMA",
     "region": "Japan",
     "spatial_resolution_km": 5.0,
@@ -707,11 +723,12 @@
   {
     "id": "jma_gsm",
     "name": "JMA GSM",
+    "short_name": null,
     "provider": "JMA",
     "region": "Global",
     "spatial_resolution_km": 20.0,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 252,
+    "max_forecast_hours": 264,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -746,6 +763,7 @@
   {
     "id": "kma_seamless",
     "name": "KMA Seamless",
+    "short_name": "KMA SL",
     "provider": "KMA",
     "region": "Global / Korea",
     "spatial_resolution_km": 1.5,
@@ -770,6 +788,7 @@
   {
     "id": "kma_ldps",
     "name": "KMA LDPS 1.5km",
+    "short_name": "KMA LDPS",
     "provider": "KMA",
     "region": "Korea",
     "spatial_resolution_km": 1.5,
@@ -794,6 +813,7 @@
   {
     "id": "kma_gdps",
     "name": "KMA GDPS 12km",
+    "short_name": "KMA GDPS",
     "provider": "KMA",
     "region": "Global",
     "spatial_resolution_km": 12.0,
@@ -818,6 +838,7 @@
   {
     "id": "icon_seamless",
     "name": "ICON Seamless",
+    "short_name": "ICON SL",
     "provider": "DWD",
     "region": "Global / Regional",
     "spatial_resolution_km": 2.2,
@@ -865,6 +886,7 @@
   {
     "id": "icon_global",
     "name": "ICON Global",
+    "short_name": "ICON",
     "provider": "DWD",
     "region": "Global",
     "spatial_resolution_km": 13.0,
@@ -910,6 +932,7 @@
   {
     "id": "icon_eu",
     "name": "ICON-EU",
+    "short_name": null,
     "provider": "DWD",
     "region": "Europe",
     "spatial_resolution_km": 7.0,
@@ -956,6 +979,7 @@
   {
     "id": "icon_d2",
     "name": "ICON-D2",
+    "short_name": null,
     "provider": "DWD",
     "region": "Central Europe",
     "spatial_resolution_km": 2.2,
@@ -1003,6 +1027,7 @@
   {
     "id": "cmc_gem_seamless",
     "name": "GEM Seamless",
+    "short_name": "GEM SL",
     "provider": "GEM",
     "region": "Global / North America",
     "spatial_resolution_km": 2.5,
@@ -1043,6 +1068,7 @@
   {
     "id": "cmc_gem_gdps",
     "name": "GEM Global",
+    "short_name": null,
     "provider": "GEM",
     "region": "Global",
     "spatial_resolution_km": 15.0,
@@ -1083,6 +1109,7 @@
   {
     "id": "cmc_gem_rdps",
     "name": "GEM Regional",
+    "short_name": "RDPS",
     "provider": "GEM",
     "region": "North America",
     "spatial_resolution_km": 10.0,
@@ -1122,6 +1149,7 @@
   {
     "id": "cmc_gem_hrdps",
     "name": "GEM HRDPS Continental",
+    "short_name": "HRDPS",
     "provider": "GEM",
     "region": "Canada",
     "spatial_resolution_km": 2.5,
@@ -1161,9 +1189,10 @@
   {
     "id": "cmc_gem_hrdps_west",
     "name": "GEM HRDPS West",
+    "short_name": "HRDPS W",
     "provider": "GEM",
     "region": "Western Canada",
-    "spatial_resolution_km": 2.5,
+    "spatial_resolution_km": 1.0,
     "temporal_resolution_hours": 1,
     "max_forecast_hours": 48,
     "supported_variables": [
@@ -1199,6 +1228,7 @@
   {
     "id": "meteofrance_seamless",
     "name": "Météo-France Seamless",
+    "short_name": "MF SL",
     "provider": "Météo-France",
     "region": "Global / France",
     "spatial_resolution_km": 1.3,
@@ -1253,11 +1283,12 @@
   {
     "id": "meteofrance_arpege_world",
     "name": "ARPEGE World",
+    "short_name": "ARPEGE",
     "provider": "Météo-France",
     "region": "Global",
     "spatial_resolution_km": 10.0,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 114,
+    "max_forecast_hours": 102,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -1307,11 +1338,12 @@
   {
     "id": "meteofrance_arpege_europe",
     "name": "ARPEGE Europe",
+    "short_name": "ARPEGE EU",
     "provider": "Météo-France",
     "region": "Europe",
     "spatial_resolution_km": 7.5,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 114,
+    "max_forecast_hours": 102,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -1361,11 +1393,12 @@
   {
     "id": "meteofrance_arome_france",
     "name": "AROME France",
+    "short_name": "AROME FR",
     "provider": "Météo-France",
     "region": "France",
     "spatial_resolution_km": 1.3,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 46,
+    "max_forecast_hours": 51,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -1415,11 +1448,12 @@
   {
     "id": "meteofrance_arome_france_hd",
     "name": "AROME France HD",
+    "short_name": "AROME HD",
     "provider": "Météo-France",
     "region": "France",
     "spatial_resolution_km": 1.5,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 46,
+    "max_forecast_hours": 51,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -1439,11 +1473,12 @@
   {
     "id": "italia_meteo_arpae_icon_2i",
     "name": "ItaliaMeteo ARPAE ICON-2i",
+    "short_name": "ICON-2I",
     "provider": "ItaliaMeteo / ARPAE",
     "region": "Italy",
     "spatial_resolution_km": 2.2,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 67,
+    "max_forecast_hours": 72,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -1472,6 +1507,7 @@
   {
     "id": "metno_seamless",
     "name": "MET Norway Nordic Seamless (with ECMWF)",
+    "short_name": "MetNo SL",
     "provider": "MET Norway",
     "region": "Nordic",
     "spatial_resolution_km": 2.5,
@@ -1498,11 +1534,12 @@
   {
     "id": "metno_nordic",
     "name": "MET Norway Nordic",
+    "short_name": "MetNo",
     "provider": "MET Norway",
     "region": "Nordic",
     "spatial_resolution_km": 2.5,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 60,
+    "max_forecast_hours": 58,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -1521,6 +1558,7 @@
   {
     "id": "knmi_seamless",
     "name": "KNMI Seamless (with ECMWF)",
+    "short_name": "KNMI SL",
     "provider": "KNMI",
     "region": "Europe / Netherlands",
     "spatial_resolution_km": 2.5,
@@ -1547,11 +1585,12 @@
   {
     "id": "knmi_harmonie_arome_europe",
     "name": "KNMI Harmonie AROME Europe",
+    "short_name": "KNMI HARM",
     "provider": "KNMI",
     "region": "Europe",
     "spatial_resolution_km": 5.0,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 58,
+    "max_forecast_hours": 60,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -1570,11 +1609,12 @@
   {
     "id": "knmi_harmonie_arome_netherlands",
     "name": "KNMI Harmonie AROME Netherlands",
+    "short_name": "KNMI HARM NL",
     "provider": "KNMI",
     "region": "Netherlands",
     "spatial_resolution_km": 2.5,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 58,
+    "max_forecast_hours": 60,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -1593,6 +1633,7 @@
   {
     "id": "dmi_seamless",
     "name": "DMI Seamless (with ECMWF)",
+    "short_name": "DMI SL",
     "provider": "DMI",
     "region": "Europe / Denmark",
     "spatial_resolution_km": 2.5,
@@ -1619,11 +1660,12 @@
   {
     "id": "dmi_harmonie_arome_europe",
     "name": "DMI Harmonie AROME Europe",
+    "short_name": "DMI HARM",
     "provider": "DMI",
     "region": "Europe",
     "spatial_resolution_km": 2.5,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 57,
+    "max_forecast_hours": 59,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -1644,6 +1686,7 @@
   {
     "id": "ukmo_seamless",
     "name": "UK Met Office Seamless",
+    "short_name": "UKMO SL",
     "provider": "UK Met Office",
     "region": "Global / UK",
     "spatial_resolution_km": 2.0,
@@ -1657,6 +1700,7 @@
       "wind_direction",
       "cloud_cover",
       "precipitation",
+      "precipitation_probability",
       "cape",
       "convective_inhibition"
     ],
@@ -1684,11 +1728,12 @@
   {
     "id": "ukmo_global_deterministic_10km",
     "name": "UK Met Office Global 10km",
+    "short_name": "UKMO 10km",
     "provider": "UK Met Office",
     "region": "Global",
     "spatial_resolution_km": 10.0,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 151,
+    "max_forecast_hours": 168,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -1697,6 +1742,7 @@
       "wind_direction",
       "cloud_cover",
       "precipitation",
+      "precipitation_probability",
       "cape",
       "convective_inhibition"
     ],
@@ -1724,11 +1770,12 @@
   {
     "id": "ukmo_uk_deterministic_2km",
     "name": "UK Met Office UK 2km",
+    "short_name": "UKMO UK",
     "provider": "UK Met Office",
     "region": "UK",
     "spatial_resolution_km": 2.0,
     "temporal_resolution_hours": 1,
-    "max_forecast_hours": 120,
+    "max_forecast_hours": 54,
     "supported_variables": [
       "temperature",
       "apparent_temperature",
@@ -1737,6 +1784,7 @@
       "wind_direction",
       "cloud_cover",
       "precipitation",
+      "precipitation_probability",
       "cape"
     ],
     "active": true,
@@ -1763,6 +1811,7 @@
   {
     "id": "meteoswiss_icon_seamless",
     "name": "MeteoSwiss Seamless",
+    "short_name": "ICON-CH SL",
     "provider": "MeteoSwiss",
     "region": "Switzerland / Alps",
     "spatial_resolution_km": 1.1,
@@ -1789,6 +1838,7 @@
   {
     "id": "meteoswiss_icon_ch1",
     "name": "MeteoSwiss ICON CH1",
+    "short_name": "ICON-CH1",
     "provider": "MeteoSwiss",
     "region": "Switzerland / Alps",
     "spatial_resolution_km": 1.1,
@@ -1815,6 +1865,7 @@
   {
     "id": "meteoswiss_icon_ch2",
     "name": "MeteoSwiss ICON CH2",
+    "short_name": "ICON-CH2",
     "provider": "MeteoSwiss",
     "region": "Central Europe / Alps",
     "spatial_resolution_km": 2.1,
@@ -1841,6 +1892,7 @@
   {
     "id": "geosphere_seamless",
     "name": "GeoSphere Seamless (with ECMWF)",
+    "short_name": "GeoS SL",
     "provider": "GeoSphere Austria",
     "region": "Austria / Alps",
     "spatial_resolution_km": 2.5,
@@ -1867,6 +1919,7 @@
   {
     "id": "geosphere_arome_austria",
     "name": "GeoSphere AROME Austria",
+    "short_name": "AROME AT",
     "provider": "GeoSphere Austria",
     "region": "Austria / Alps",
     "spatial_resolution_km": 2.5,

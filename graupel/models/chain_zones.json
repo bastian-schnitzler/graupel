@@ -1,0 +1,957 @@
+{
+ "generated_by": "dev-tools/update_regions.py",
+ "zones": [
+  {
+   "id": "ecmwf_ifs~ecmwf_ifs025",
+   "main_chain_ids": [
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "global_fallback",
+    "region"
+   ],
+   "regions": [
+    "Benelux",
+    "France",
+    "Iberia",
+    "Japan",
+    "Nordic & Baltic",
+    "USA"
+   ],
+   "group": "Global",
+   "sample": [
+    -68.2495,
+    12.175
+   ],
+   "area_km2": 102266596,
+   "coast_area_km2": 679699,
+   "sea_area_km2": 182055845
+  },
+  {
+   "id": "icon_eu.ecmwf_ifs~icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback",
+    "region"
+   ],
+   "regions": [
+    "Central Eastern Europe",
+    "Iberia",
+    "Nordic & Baltic",
+    "Western Balkans"
+   ],
+   "group": "Europe",
+   "sample": [
+    21.551,
+    44.117
+   ],
+   "area_km2": 15146820,
+   "coast_area_km2": 468858,
+   "sea_area_km2": 4435048
+  },
+  {
+   "id": "cmc_gem_hrdps.cmc_gem_rdps.ecmwf_ifs~cmc_gem_hrdps.cmc_gem_rdps.ecmwf_ifs025",
+   "main_chain_ids": [
+    "cmc_gem_hrdps",
+    "cmc_gem_rdps",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "cmc_gem_hrdps",
+    "cmc_gem_rdps",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "region"
+   ],
+   "regions": [
+    "Canada",
+    "USA"
+   ],
+   "group": "North America",
+   "sample": [
+    -143.2407,
+    61.2199
+   ],
+   "area_km2": 8888299,
+   "coast_area_km2": 1842378,
+   "sea_area_km2": 396
+  },
+  {
+   "id": "ncep_hrrr_conus.cmc_gem_rdps.ncep_nbm_conus.ecmwf_ifs~ncep_hrrr_conus.cmc_gem_rdps.ecmwf_ifs025",
+   "main_chain_ids": [
+    "ncep_hrrr_conus",
+    "cmc_gem_rdps",
+    "ncep_nbm_conus",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "ncep_hrrr_conus",
+    "cmc_gem_rdps",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "region"
+   ],
+   "regions": [
+    "USA"
+   ],
+   "group": "North America",
+   "sample": [
+    -88.4732,
+    41.6487
+   ],
+   "area_km2": 8065601,
+   "coast_area_km2": 867721,
+   "sea_area_km2": 616
+  },
+  {
+   "id": "cmc_gem_rdps.ecmwf_ifs~cmc_gem_rdps.ecmwf_ifs025",
+   "main_chain_ids": [
+    "cmc_gem_rdps",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "cmc_gem_rdps",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "region"
+   ],
+   "regions": [
+    "Canada",
+    "Nordic & Baltic",
+    "USA"
+   ],
+   "group": "Intercontinental",
+   "sample": [
+    32.5232,
+    80.1522
+   ],
+   "area_km2": 2506736,
+   "coast_area_km2": 2713039,
+   "sea_area_km2": 940
+  },
+  {
+   "id": "meteofrance_arpege_europe.ecmwf_ifs~meteofrance_arpege_europe.ecmwf_ifs025",
+   "main_chain_ids": [
+    "meteofrance_arpege_europe",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "meteofrance_arpege_europe",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback"
+   ],
+   "regions": [],
+   "group": "Europe",
+   "sample": [
+    -25.1063,
+    36.9715
+   ],
+   "area_km2": 2221203,
+   "coast_area_km2": 134855,
+   "sea_area_km2": 2407616
+  },
+  {
+   "id": "metno_nordic.icon_eu.ecmwf_ifs~icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "metno_nordic",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback",
+    "region"
+   ],
+   "regions": [
+    "Nordic & Baltic"
+   ],
+   "group": "Europe",
+   "sample": [
+    12.2954,
+    57.2679
+   ],
+   "area_km2": 1407043,
+   "coast_area_km2": 537373,
+   "sea_area_km2": 267638
+  },
+  {
+   "id": "jma_msm.ecmwf_ifs~jma_msm.ecmwf_ifs025",
+   "main_chain_ids": [
+    "jma_msm",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "jma_msm",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback",
+    "region"
+   ],
+   "regions": [
+    "Japan",
+    "Korea"
+   ],
+   "group": "Asia",
+   "sample": [
+    130.0074,
+    42.764
+   ],
+   "area_km2": 1163502,
+   "coast_area_km2": 1266842,
+   "sea_area_km2": 3689334
+  },
+  {
+   "id": "ncep_hrrr_conus.ecmwf_ifs~ncep_hrrr_conus.ecmwf_ifs025",
+   "main_chain_ids": [
+    "ncep_hrrr_conus",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "ncep_hrrr_conus",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback"
+   ],
+   "regions": [],
+   "group": "North America",
+   "sample": [
+    -105.8706,
+    28.3391
+   ],
+   "area_km2": 917247,
+   "coast_area_km2": 0,
+   "sea_area_km2": 3129292
+  },
+  {
+   "id": "dmi_harmonie_arome_europe.icon_eu.ecmwf_ifs~icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "dmi_harmonie_arome_europe",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback",
+    "region"
+   ],
+   "regions": [
+    "Denmark",
+    "Iceland",
+    "Poland"
+   ],
+   "group": "Europe",
+   "sample": [
+    10.4564,
+    57.674
+   ],
+   "area_km2": 709683,
+   "coast_area_km2": 176065,
+   "sea_area_km2": 2112293
+  },
+  {
+   "id": "italia_meteo_arpae_icon_2i.icon_eu.ecmwf_ifs~icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "italia_meteo_arpae_icon_2i",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback",
+    "region"
+   ],
+   "regions": [
+    "Italy",
+    "Western Balkans"
+   ],
+   "group": "Europe",
+   "sample": [
+    16.6608,
+    44.607
+   ],
+   "area_km2": 585546,
+   "coast_area_km2": 560983,
+   "sea_area_km2": 366564
+  },
+  {
+   "id": "meteofrance_arome_france_hd.meteofrance_arpege_europe.ecmwf_ifs~meteofrance_arome_france.meteofrance_arpege_europe.ecmwf_ifs025",
+   "main_chain_ids": [
+    "meteofrance_arome_france_hd",
+    "meteofrance_arpege_europe",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "meteofrance_arome_france",
+    "meteofrance_arpege_europe",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "region"
+   ],
+   "regions": [
+    "France"
+   ],
+   "group": "Europe",
+   "sample": [
+    6.5725,
+    46.3875
+   ],
+   "area_km2": 530390,
+   "coast_area_km2": 187606,
+   "sea_area_km2": 70
+  },
+  {
+   "id": "meteofrance_arome_france_hd.icon_eu.ecmwf_ifs~meteofrance_arome_france.icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "meteofrance_arome_france_hd",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "meteofrance_arome_france",
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "region"
+   ],
+   "regions": [
+    "Iberia"
+   ],
+   "group": "Europe",
+   "sample": [
+    -3.4108,
+    42.5555
+   ],
+   "area_km2": 433330,
+   "coast_area_km2": 196642,
+   "sea_area_km2": 70
+  },
+  {
+   "id": "icon_d2.icon_eu.ecmwf_ifs~icon_d2.icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "icon_d2",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "icon_d2",
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "region"
+   ],
+   "regions": [
+    "Germany",
+    "Northern Alps"
+   ],
+   "group": "Europe",
+   "sample": [
+    10.844,
+    47.6175
+   ],
+   "area_km2": 357550,
+   "coast_area_km2": 37822,
+   "sea_area_km2": 30
+  },
+  {
+   "id": "kma_ldps.jma_msm.ecmwf_ifs~jma_msm.ecmwf_ifs025",
+   "main_chain_ids": [
+    "kma_ldps",
+    "jma_msm",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "jma_msm",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback",
+    "region"
+   ],
+   "regions": [
+    "Korea"
+   ],
+   "group": "Asia",
+   "sample": [
+    126.702,
+    38.3928
+   ],
+   "area_km2": 353054,
+   "coast_area_km2": 281322,
+   "sea_area_km2": 218689
+  },
+  {
+   "id": "ukmo_uk_deterministic_2km.ukmo_global_deterministic_10km.ecmwf_ifs~ukmo_uk_deterministic_2km.ukmo_global_deterministic_10km.ecmwf_ifs025",
+   "main_chain_ids": [
+    "ukmo_uk_deterministic_2km",
+    "ukmo_global_deterministic_10km",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "ukmo_uk_deterministic_2km",
+    "ukmo_global_deterministic_10km",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "region"
+   ],
+   "regions": [
+    "United Kingdom & Ireland"
+   ],
+   "group": "Europe",
+   "sample": [
+    0.9494,
+    51.1867
+   ],
+   "area_km2": 314058,
+   "coast_area_km2": 492877,
+   "sea_area_km2": 293
+  },
+  {
+   "id": "geosphere_arome_austria.icon_eu.ecmwf_ifs~icon_d2.icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "geosphere_arome_austria",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "icon_d2",
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "region"
+   ],
+   "regions": [
+    "Austria",
+    "Bavarian Alps (south)",
+    "Central Eastern Europe",
+    "Eastern Alps"
+   ],
+   "group": "Europe",
+   "sample": [
+    10.2777,
+    47.3425
+   ],
+   "area_km2": 240069,
+   "coast_area_km2": 19262,
+   "sea_area_km2": 1
+  },
+  {
+   "id": "dmi_harmonie_arome_europe.icon_eu.ecmwf_ifs~icon_d2.icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "dmi_harmonie_arome_europe",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "icon_d2",
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "region"
+   ],
+   "regions": [
+    "Denmark",
+    "Poland"
+   ],
+   "group": "Europe",
+   "sample": [
+    9.2988,
+    54.8645
+   ],
+   "area_km2": 163945,
+   "coast_area_km2": 96085,
+   "sea_area_km2": 21
+  },
+  {
+   "id": "geosphere_arome_austria.icon_eu.ecmwf_ifs~icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "geosphere_arome_austria",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback",
+    "region"
+   ],
+   "regions": [
+    "Central Eastern Europe"
+   ],
+   "group": "Europe",
+   "sample": [
+    15.5977,
+    43.8751
+   ],
+   "area_km2": 124812,
+   "coast_area_km2": 6961,
+   "sea_area_km2": 0
+  },
+  {
+   "id": "italia_meteo_arpae_icon_2i.icon_eu.ecmwf_ifs~icon_d2.icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "italia_meteo_arpae_icon_2i",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "icon_d2",
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "region"
+   ],
+   "regions": [
+    "Dolomites",
+    "Italy"
+   ],
+   "group": "Europe",
+   "sample": [
+    11.55,
+    46.1675
+   ],
+   "area_km2": 110414,
+   "coast_area_km2": 15336,
+   "sea_area_km2": 0
+  },
+  {
+   "id": "knmi_harmonie_arome_netherlands.icon_eu.ecmwf_ifs~icon_d2.icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "knmi_harmonie_arome_netherlands",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "icon_d2",
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "region"
+   ],
+   "regions": [
+    "Benelux"
+   ],
+   "group": "Europe",
+   "sample": [
+    6.0605,
+    50.127
+   ],
+   "area_km2": 70210,
+   "coast_area_km2": 41613,
+   "sea_area_km2": 25
+  },
+  {
+   "id": "meteofrance_arome_france_hd.icon_eu.ecmwf_ifs~icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "meteofrance_arome_france_hd",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback",
+    "region"
+   ],
+   "regions": [
+    "Iberia"
+   ],
+   "group": "Europe",
+   "sample": [
+    -8.6677,
+    42.612
+   ],
+   "area_km2": 59684,
+   "coast_area_km2": 85649,
+   "sea_area_km2": 116036
+  },
+  {
+   "id": "dmi_harmonie_arome_europe.ecmwf_ifs~ecmwf_ifs025",
+   "main_chain_ids": [
+    "dmi_harmonie_arome_europe",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback",
+    "region"
+   ],
+   "regions": [
+    "Iceland"
+   ],
+   "group": "Europe",
+   "sample": [
+    -36.5689,
+    66.2153
+   ],
+   "area_km2": 46222,
+   "coast_area_km2": 2602,
+   "sea_area_km2": 312475
+  },
+  {
+   "id": "meteoswiss_icon_ch1.meteoswiss_icon_ch2.ecmwf_ifs~icon_d2.icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "meteoswiss_icon_ch1",
+    "meteoswiss_icon_ch2",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "icon_d2",
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "region"
+   ],
+   "regions": [
+    "Switzerland",
+    "Western Alps (CH)"
+   ],
+   "group": "Europe",
+   "sample": [
+    7.4582,
+    46.214
+   ],
+   "area_km2": 41667,
+   "coast_area_km2": 0,
+   "sea_area_km2": 0
+  },
+  {
+   "id": "meteofrance_arome_france_hd.meteoswiss_icon_ch2.ecmwf_ifs~meteofrance_arome_france.icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "meteofrance_arome_france_hd",
+    "meteoswiss_icon_ch2",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "meteofrance_arome_france",
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "region"
+   ],
+   "regions": [
+    "Western Alps (FR)"
+   ],
+   "group": "Europe",
+   "sample": [
+    6.4987,
+    45.9666
+   ],
+   "area_km2": 24404,
+   "coast_area_km2": 0,
+   "sea_area_km2": 0
+  },
+  {
+   "id": "cmc_gem_hrdps.ecmwf_ifs~cmc_gem_hrdps.ecmwf_ifs025",
+   "main_chain_ids": [
+    "cmc_gem_hrdps",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "cmc_gem_hrdps",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback"
+   ],
+   "regions": [],
+   "group": "North America",
+   "sample": [
+    -64.7358,
+    32.3163
+   ],
+   "area_km2": 57,
+   "coast_area_km2": 0,
+   "sea_area_km2": 4538618
+  },
+  {
+   "id": "metno_nordic.cmc_gem_rdps.ecmwf_ifs~cmc_gem_rdps.ecmwf_ifs025",
+   "main_chain_ids": [
+    "metno_nordic",
+    "cmc_gem_rdps",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "cmc_gem_rdps",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "region"
+   ],
+   "regions": [
+    "Nordic & Baltic"
+   ],
+   "group": "Europe",
+   "sample": [
+    26.3144,
+    71.3405
+   ],
+   "area_km2": 0,
+   "coast_area_km2": 36878,
+   "sea_area_km2": 41
+  },
+  {
+   "id": "meteofrance_arome_france.icon_eu.ecmwf_ifs~meteofrance_arome_france.icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "meteofrance_arome_france",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "meteofrance_arome_france",
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback"
+   ],
+   "regions": [],
+   "group": "Europe",
+   "sample": [
+    3.0031,
+    53.837
+   ],
+   "area_km2": 0,
+   "coast_area_km2": 0,
+   "sea_area_km2": 282814
+  },
+  {
+   "id": "meteofrance_arome_france_hd.icon_eu.ecmwf_ifs~ukmo_uk_deterministic_2km.icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "meteofrance_arome_france_hd",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "ukmo_uk_deterministic_2km",
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback"
+   ],
+   "regions": [],
+   "group": "Europe",
+   "sample": [
+    6.0854,
+    54.8548
+   ],
+   "area_km2": 0,
+   "coast_area_km2": 0,
+   "sea_area_km2": 83015
+  },
+  {
+   "id": "ukmo_uk_deterministic_2km.icon_eu.ecmwf_ifs~ukmo_uk_deterministic_2km.icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "ukmo_uk_deterministic_2km",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "ukmo_uk_deterministic_2km",
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback"
+   ],
+   "regions": [],
+   "group": "Europe",
+   "sample": [
+    4.3221,
+    55.102
+   ],
+   "area_km2": 0,
+   "coast_area_km2": 0,
+   "sea_area_km2": 1449308
+  },
+  {
+   "id": "dmi_harmonie_arome_europe.meteofrance_arpege_europe.ecmwf_ifs~meteofrance_arpege_europe.ecmwf_ifs025",
+   "main_chain_ids": [
+    "dmi_harmonie_arome_europe",
+    "meteofrance_arpege_europe",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "meteofrance_arpege_europe",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback"
+   ],
+   "regions": [],
+   "group": "Europe",
+   "sample": [
+    -28.0985,
+    54.7213
+   ],
+   "area_km2": 0,
+   "coast_area_km2": 0,
+   "sea_area_km2": 837914
+  },
+  {
+   "id": "metno_nordic.meteofrance_arpege_europe.ecmwf_ifs~meteofrance_arpege_europe.ecmwf_ifs025",
+   "main_chain_ids": [
+    "metno_nordic",
+    "meteofrance_arpege_europe",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "meteofrance_arpege_europe",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback"
+   ],
+   "regions": [],
+   "group": "Europe",
+   "sample": [
+    7.1315,
+    71.3395
+   ],
+   "area_km2": 0,
+   "coast_area_km2": 0,
+   "sea_area_km2": 86851
+  },
+  {
+   "id": "metno_nordic.ecmwf_ifs~ecmwf_ifs025",
+   "main_chain_ids": [
+    "metno_nordic",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback"
+   ],
+   "regions": [],
+   "group": "Europe",
+   "sample": [
+    -9.9414,
+    71.781
+   ],
+   "area_km2": 0,
+   "coast_area_km2": 0,
+   "sea_area_km2": 203342
+  },
+  {
+   "id": "icon_d2.knmi_harmonie_arome_europe.icon_eu.ecmwf_ifs~icon_d2.icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "icon_d2",
+    "knmi_harmonie_arome_europe",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "icon_d2",
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback"
+   ],
+   "regions": [],
+   "group": "Europe",
+   "sample": [
+    18.9993,
+    55.9975
+   ],
+   "area_km2": 0,
+   "coast_area_km2": 0,
+   "sea_area_km2": 4643
+  },
+  {
+   "id": "meteofrance_arome_france.italia_meteo_arpae_icon_2i.icon_eu.ecmwf_ifs~meteofrance_arome_france.icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "meteofrance_arome_france",
+    "italia_meteo_arpae_icon_2i",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "meteofrance_arome_france",
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback"
+   ],
+   "regions": [],
+   "group": "Europe",
+   "sample": [
+    11.519,
+    40.5209
+   ],
+   "area_km2": 0,
+   "coast_area_km2": 0,
+   "sea_area_km2": 129882
+  },
+  {
+   "id": "meteofrance_arome_france_hd.italia_meteo_arpae_icon_2i.icon_eu.ecmwf_ifs~icon_eu.ecmwf_ifs025",
+   "main_chain_ids": [
+    "meteofrance_arome_france_hd",
+    "italia_meteo_arpae_icon_2i",
+    "icon_eu",
+    "ecmwf_ifs"
+   ],
+   "cloud_chain_ids": [
+    "icon_eu",
+    "ecmwf_ifs025"
+   ],
+   "reasons": [
+    "domain_fallback"
+   ],
+   "regions": [],
+   "group": "Europe",
+   "sample": [
+    12.4715,
+    40.0075
+   ],
+   "area_km2": 0,
+   "coast_area_km2": 0,
+   "sea_area_km2": 30308
+  }
+ ]
+}

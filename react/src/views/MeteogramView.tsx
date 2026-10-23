@@ -27,12 +27,28 @@ import {
   resolveTargetCloudChain,
   calculateMeteogramScale,
   DEFAULT_MAIN_CHAIN,
+  applyAvailabilityToMetadata,
+  applyMissingSourcesToMetadata,
+  capChainToAvailability,
+  mergeDraggedChain,
 } from "./meteogramViewUtils";
 import { buildModelMap } from "./config/configFactories";
+import {
+  POWER_DEFAULT_LAYOUT_ID,
+  resolveChartLayout,
+} from "../layouts/layoutResolution";
+import { getDrawnQuantities } from "../layouts/layoutQuantities";
 import { DEFAULT_LOCATION } from "../App.logic";
+import type { DayRangeChoice, TimeRange } from "../utils/meteogramZoom";
 
 interface MeteogramViewProps {
   currentConfig: MeteogramConfig | null;
+  /** Meteogram layout (system.md §4); default: the `fallbackLayoutId` layout. */
+  chartLayout?: unknown;
+  /** Built-in layout drawn without or instead of an invalid `chartLayout`. */
+  fallbackLayoutId?: string;
+  /** Power mode (#203): model headers and boundaries whatever the layout says. */
+  forceModelHeaders?: boolean;
   selectedLocation?: Location;
   forecastResponse?: HarmonizedForecastResponse | null;
   loading?: boolean;
@@ -45,10 +61,24 @@ interface MeteogramViewProps {
   displayCloudModelChain?: WeatherModel[];
   onCloudModelChainDisplayChange?: (newChain: WeatherModel[]) => void;
   isFullscreenMapOpen?: boolean;
+  isMainChainCollapsed?: boolean;
+  onToggleMainChainCollapse?: () => void;
+  isCloudChainCollapsed?: boolean;
+  onToggleCloudChainCollapse?: () => void;
+  getPersistedVisibleRange?: () => TimeRange | null;
+  onVisibleRangeChange?: (range: TimeRange | null) => void;
+  /** Chosen day-range button (#162), kept by App across forecasts. */
+  dayRangeChoice?: DayRangeChoice;
+  onDayRangeChoiceChange?: (days: DayRangeChoice) => void;
+  /** Model chain cards above the chart; hidden in normal mode. */
+  showModelChains?: boolean;
 }
 
 export const MeteogramView: React.FC<MeteogramViewProps> = ({
   currentConfig,
+  chartLayout,
+  fallbackLayoutId,
+  forceModelHeaders = false,
   selectedLocation: propLocation,
   forecastResponse: propForecastResponse,
   loading: propLoading,
@@ -61,6 +91,15 @@ export const MeteogramView: React.FC<MeteogramViewProps> = ({
   displayCloudModelChain,
   onCloudModelChainDisplayChange,
   isFullscreenMapOpen,
+  isMainChainCollapsed: propMainCollapsed,
+  onToggleMainChainCollapse,
+  isCloudChainCollapsed: propCloudCollapsed,
+  onToggleCloudChainCollapse,
+  getPersistedVisibleRange,
+  showModelChains = true,
+  onVisibleRangeChange,
+  dayRangeChoice,
+  onDayRangeChoiceChange,
 }) => {
   const selectedLocation =
     propLocation || currentConfig?.location || DEFAULT_LOCATION;
@@ -92,10 +131,12 @@ export const MeteogramView: React.FC<MeteogramViewProps> = ({
   const [draggedCloudBoundaryHour, setDraggedCloudBoundaryHour] = useState<
     number | null
   >(null);
-  const [isMainChainCollapsed, setIsMainChainCollapsed] =
+  const [internalMainCollapsed, setInternalMainCollapsed] =
     useState<boolean>(false);
-  const [isCloudChainCollapsed, setIsCloudChainCollapsed] =
+  const [internalCloudCollapsed, setInternalCloudCollapsed] =
     useState<boolean>(false);
+  const isMainChainCollapsed = propMainCollapsed ?? internalMainCollapsed;
+  const isCloudChainCollapsed = propCloudCollapsed ?? internalCloudCollapsed;
   const [userTimezone, setUserTimezone] = useState<string | undefined>(
     () => apiService.getCachedUserTimezone() || undefined,
   );
@@ -218,7 +259,84 @@ export const MeteogramView: React.FC<MeteogramViewProps> = ({
     currentConfig?.cloud_model_chain,
   ]);
 
-  const handleModelChainChange = (newChain: WeatherModel[]) => {
+  // Meteogram View shows each model only for the hours its latest run
+  // delivers; the requested (config or dragged) chain stays uncapped so a
+  // later, longer run extends the boundary again.
+  const mainAvailability = forecastResponse?.model_availability;
+  const cloudAvailability = forecastResponse?.cloud_model_availability;
+  const displayedModelChain = useMemo(
+    () => capChainToAvailability(activeModelChain, mainAvailability),
+    [activeModelChain, mainAvailability],
+  );
+  const displayedCloudModelChain = useMemo(
+    () => capChainToAvailability(activeCloudModelChain, cloudAvailability),
+    [activeCloudModelChain, cloudAvailability],
+  );
+  const mainRunSegments = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(mainAvailability ?? {}).map(([name, info]) => [
+          name,
+          info.run_segments,
+        ]),
+      ),
+    [mainAvailability],
+  );
+  // Derived quantities the layout draws: their sources are checked per model.
+  const drawnQuantities = useMemo(
+    () =>
+      getDrawnQuantities(
+        resolveChartLayout(
+          chartLayout,
+          fallbackLayoutId ?? POWER_DEFAULT_LAYOUT_ID,
+        ).layout,
+      ),
+    [chartLayout, fallbackLayoutId],
+  );
+  const mainChainModels = useMemo(
+    () =>
+      applyMissingSourcesToMetadata(
+        applyAvailabilityToMetadata(
+          availableModels,
+          activeModelChain,
+          mainAvailability,
+          forecastResponse?.forecast_start_time,
+        ),
+        activeModelChain,
+        drawnQuantities,
+        forecastResponse?.model_forecasts,
+      ),
+    [
+      availableModels,
+      activeModelChain,
+      mainAvailability,
+      forecastResponse?.forecast_start_time,
+      forecastResponse?.model_forecasts,
+      drawnQuantities,
+    ],
+  );
+  const cloudChainModels = useMemo(
+    () =>
+      applyAvailabilityToMetadata(
+        availableModels,
+        activeCloudModelChain,
+        cloudAvailability,
+        forecastResponse?.forecast_start_time,
+      ),
+    [
+      availableModels,
+      activeCloudModelChain,
+      cloudAvailability,
+      forecastResponse?.forecast_start_time,
+    ],
+  );
+
+  const handleModelChainChange = (draggedChain: WeatherModel[]) => {
+    const newChain = mergeDraggedChain(
+      activeModelChainRef.current,
+      capChainToAvailability(activeModelChainRef.current, mainAvailability),
+      draggedChain,
+    );
     setActiveModelChain(newChain);
     activeModelChainRef.current = newChain;
     onModelChainDisplayChange?.(newChain);
@@ -228,7 +346,15 @@ export const MeteogramView: React.FC<MeteogramViewProps> = ({
     onModelChainDisplayChange?.(activeModelChainRef.current);
   };
 
-  const handleCloudModelChainChange = (newChain: WeatherModel[]) => {
+  const handleCloudModelChainChange = (draggedChain: WeatherModel[]) => {
+    const newChain = mergeDraggedChain(
+      activeCloudModelChainRef.current,
+      capChainToAvailability(
+        activeCloudModelChainRef.current,
+        cloudAvailability,
+      ),
+      draggedChain,
+    );
     setActiveCloudModelChain(newChain);
     activeCloudModelChainRef.current = newChain;
     onCloudModelChainDisplayChange?.(newChain);
@@ -253,10 +379,10 @@ export const MeteogramView: React.FC<MeteogramViewProps> = ({
     () =>
       calculateActiveTimelineEnd(
         forecastResponse?.forecast_start_time,
-        activeModelChain,
+        displayedModelChain,
         forecastResponse?.timeline_end,
       ),
-    [forecastResponse, activeModelChain],
+    [forecastResponse, displayedModelChain],
   );
 
   useEffect(() => {
@@ -268,23 +394,23 @@ export const MeteogramView: React.FC<MeteogramViewProps> = ({
     () =>
       resolveActiveCombinedForecast(
         forecastResponse,
-        activeModelChain,
+        displayedModelChain,
         activeTimelineEnd,
       ),
-    [forecastResponse, activeModelChain, activeTimelineEnd],
+    [forecastResponse, displayedModelChain, activeTimelineEnd],
   );
 
   const activeVerticalCloudData = useMemo(
     () =>
       resolveActiveVerticalCloudData(
         forecastResponse,
-        activeCloudModelChain,
+        displayedCloudModelChain,
         activeCombinedForecast,
         selectedLocation,
       ),
     [
       forecastResponse,
-      activeCloudModelChain,
+      displayedCloudModelChain,
       activeCombinedForecast,
       selectedLocation,
     ],
@@ -356,24 +482,29 @@ export const MeteogramView: React.FC<MeteogramViewProps> = ({
 
   return (
     <div className="view-container meteogram-view">
-      <MeteogramModelChains
-        activeModelChain={activeModelChain}
-        activeCloudModelChain={activeCloudModelChain}
-        availableModels={availableModels}
-        onModelChainChange={handleModelChainChange}
-        onModelChainResizeEnd={handleResizeEnd}
-        onCloudModelChainChange={handleCloudModelChainChange}
-        onCloudModelChainResizeEnd={handleCloudResizeEnd}
-        onCloudBoundaryDrag={handleCloudBoundaryDrag}
-        isMainChainCollapsed={isMainChainCollapsed}
-        onToggleMainChainCollapse={() =>
-          setIsMainChainCollapsed((prev) => !prev)
-        }
-        isCloudChainCollapsed={isCloudChainCollapsed}
-        onToggleCloudChainCollapse={() =>
-          setIsCloudChainCollapsed((prev) => !prev)
-        }
-      />
+      {showModelChains && (
+        <MeteogramModelChains
+          activeModelChain={displayedModelChain}
+          activeCloudModelChain={displayedCloudModelChain}
+          availableModels={mainChainModels}
+          cloudAvailableModels={cloudChainModels}
+          onModelChainChange={handleModelChainChange}
+          onModelChainResizeEnd={handleResizeEnd}
+          onCloudModelChainChange={handleCloudModelChainChange}
+          onCloudModelChainResizeEnd={handleCloudResizeEnd}
+          onCloudBoundaryDrag={handleCloudBoundaryDrag}
+          isMainChainCollapsed={isMainChainCollapsed}
+          onToggleMainChainCollapse={
+            onToggleMainChainCollapse ??
+            (() => setInternalMainCollapsed((prev) => !prev))
+          }
+          isCloudChainCollapsed={isCloudChainCollapsed}
+          onToggleCloudChainCollapse={
+            onToggleCloudChainCollapse ??
+            (() => setInternalCloudCollapsed((prev) => !prev))
+          }
+        />
+      )}
 
       {error && (
         <div className="status-banner error">
@@ -430,8 +561,8 @@ export const MeteogramView: React.FC<MeteogramViewProps> = ({
             >
               <MeteogramChart
                 data={activeCombinedForecast}
-                modelChain={activeModelChain}
-                availableModels={availableModels}
+                modelChain={displayedModelChain}
+                availableModels={mainChainModels}
                 location={selectedLocation}
                 verticalCloudForecast={
                   activeVerticalCloudData.verticalCloudForecast
@@ -440,12 +571,21 @@ export const MeteogramView: React.FC<MeteogramViewProps> = ({
                   activeVerticalCloudData.verticalCloudTransitions
                 }
                 modelForecasts={forecastResponse?.model_forecasts}
+                modelRunSegments={mainRunSegments}
                 sunPhases={forecastResponse?.sun_phases}
                 forecastStartTime={forecastResponse?.forecast_start_time}
+                generatedAt={forecastResponse?.generated_at}
+                chartLayout={chartLayout}
+                fallbackLayoutId={fallbackLayoutId}
+                forceModelHeaders={forceModelHeaders}
                 timelineStart={forecastResponse?.timeline_start}
                 timelineEnd={activeTimelineEnd}
                 draggedCloudBoundaryHour={draggedCloudBoundaryHour}
                 isFullscreenMapOpen={isFullscreenMapOpen}
+                getPersistedVisibleRange={getPersistedVisibleRange}
+                onVisibleRangeChange={onVisibleRangeChange}
+                dayRangeChoice={dayRangeChoice}
+                onDayRangeChoiceChange={onDayRangeChoiceChange}
                 userTimezone={
                   forecastResponse?.user_timezone ||
                   userTimezone ||

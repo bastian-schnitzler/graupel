@@ -13,3 +13,7 @@ build/
 dist/
 *.egg-info/
 graupel/react
+react/test-results/
+react/playwright-report/
+# Worktree des Branches plan (REQ-099)
+/plan/

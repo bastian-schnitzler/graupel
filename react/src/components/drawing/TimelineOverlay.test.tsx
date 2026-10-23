@@ -28,27 +28,20 @@ describe("TimelineOverlay Component", () => {
           dayHeaderTop={10}
           dayHeaderBottom={35}
           dayHeaderHeight={25}
-          tempBottom={185}
-          combinedPlotTop={185}
-          combinedPlotBottom={320}
-          combinedPlotHeight={135}
-          windTop={320}
-          windBottom={410}
-          windHeight={90}
-          convectiveTop={410}
-          convectiveBottom={490}
-          convectiveHalfHeight={40}
+          areas={[
+            { name: "temperature", top: 35, bottom: 185 },
+            { name: "precipitation", top: 185, bottom: 320 },
+            { name: "wind", top: 320, bottom: 410 },
+            { name: "convective", top: 410, bottom: 490 },
+          ]}
           outerLeftX={50}
           outerRightX={950}
           paddingLeft={50}
           paddingRight={50}
           svgWidth={1000}
           modelHeaderBoxBottom={35}
-          hasDetailedCloud={true}
-          locElevationKm={1.5}
-          groundY={305}
+          terrainMask={{ groundY: 305, bottom: 320, elevationKm: 1.5 }}
           graphWidth={900}
-          locationName="Mount Test"
           timeline={{ xToTimestamp: (x) => x * 1000 }}
         />
       </svg>,
@@ -65,7 +58,7 @@ describe("TimelineOverlay Component", () => {
     ).toBeGreaterThan(0);
     expect(screen.getByTestId("terrain-mask")).toBeTruthy();
     expect(screen.getByTestId("terrain-mask-label").textContent).toContain(
-      "1.5 km — Mount Test",
+      "1500 m",
     );
     expect(screen.getByTestId("model-boundary-line")).toBeTruthy();
   });

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import type { MeteogramConfig } from "../../types";
-import { Trash2, Copy, GripVertical, MapPin } from "lucide-react";
+import { Trash2, Copy, GripVertical, MapPin, WandSparkles } from "lucide-react";
 import { resolveConfigDropTarget } from "./configSidebar.logic";
 
 export interface ConfigSidebarProps {
@@ -10,6 +10,8 @@ export interface ConfigSidebarProps {
   onCreateConfig: () => void;
   onDuplicateConfig: () => void;
   onDeleteConfig: () => void;
+  /** Opens "Start from auto configuration" (system.md §6.5). */
+  onStartFromAuto?: () => void;
   onReorderConfigs: (sourceIndex: number, targetIndex: number) => void;
 }
 
@@ -20,6 +22,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
   onCreateConfig,
   onDuplicateConfig,
   onDeleteConfig,
+  onStartFromAuto,
   onReorderConfigs,
 }) => {
   const draggedIdxRef = useRef<number | null>(null);
@@ -87,6 +90,17 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
         </button>
 
         <div className="sidebar-header-actions">
+          {onStartFromAuto && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-icon-only config-auto-btn"
+              onClick={onStartFromAuto}
+              aria-label="Start from auto configuration"
+              title="Start from auto configuration"
+            >
+              <WandSparkles size={16} />
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-secondary btn-icon-only config-duplicate-btn"

@@ -11,6 +11,12 @@ from graupel.data.open_meteo import OpenMeteoClient
 from graupel.data.timeline import canonical_timestamp, parse_timestamp
 
 
+@pytest.fixture
+def berlin_user_timezone(monkeypatch):
+    """User timezone Europe/Berlin on every OS (TZ wins over OS settings)."""
+    monkeypatch.setenv("TZ", "Europe/Berlin")
+
+
 class MockOpenMeteoClient(OpenMeteoClient):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -99,8 +105,11 @@ async def test_forecast_service_merging(mock_client, config):
         (now_utc - yesterday_midnight_utc).total_seconds() / 3600
     )
 
+    # ICON-D2 is fetched up to the chain end (24h) so a boundary dragged in
+    # Meteogram View still shows ICON-D2's own data; the combined series
+    # below keeps the configured 10h handover.
     icon_d2_series = result.model_forecasts["ICON-D2"]
-    assert len(icon_d2_series) == past_hours_before_t_now + 10
+    assert len(icon_d2_series) == past_hours_before_t_now + 24
     assert icon_d2_series[0].model == "ICON-D2"
     assert icon_d2_series[0].value == 10.0
 
@@ -173,6 +182,8 @@ async def test_forecast_service_all_variables(mock_client, config):
         "wind_direction",
         "cloud_cover",
         "precipitation",
+        "snowfall",
+        "snow_depth",
         "precipitation_probability",
         "cape",
         "convective_inhibition",
@@ -704,6 +715,7 @@ async def test_forecast_service_16_day_sun_phases():
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("berlin_user_timezone")
 async def test_forecast_service_past_hours_anchored_horizon():
     from graupel.data.service import get_local_now
 
@@ -775,7 +787,9 @@ async def test_forecast_service_past_hours_anchored_horizon():
     ]
     assert len(weather_calls) == 2
     assert weather_calls[0]["past_hours"] == expected_past_hours
-    assert weather_calls[0]["forecast_hours"] == 10
+    # Fetched up to min(ICON-D2 capability, chain end) for dragged boundaries.
+    assert weather_calls[0]["forecast_hours"] == 30
+    assert weather_calls[1]["forecast_hours"] == 30
 
     # Verify forecast_start_time
     expected_t_now = canonical_timestamp(
@@ -1007,6 +1021,7 @@ async def test_gfs_384_hour_window_reports_variable_specific_shortfall():
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("berlin_user_timezone")
 async def test_missing_source_hour_does_not_shift_forecast_origin_or_later_values():
     class MissingHourClient(OpenMeteoClient):
         async def _get(self, params: dict):
@@ -1146,6 +1161,7 @@ from zoneinfo import ZoneInfo
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("berlin_user_timezone")
 async def test_yesterday_visible_range_for_different_current_times():
     """Regression test: verify start timestamp is identical for different current times on the same day."""
     loc = Location(
@@ -1330,3 +1346,35 @@ async def test_weather_codes_requested_and_missing_values_are_silent(config, cap
             assert point.model == "ICON-EU"
             assert point.value is None
     assert not any("weather_code" in record.message for record in caplog.records)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "mode, layout_id",
+    [("normal", "power-default"), ("power", "power-default"), ("power", "normal-default")],
+)
+async def test_every_registered_quantity_is_requested_in_both_modes(
+    mock_client, config, mode, layout_id
+):
+    """system.md §9.3 (#139): one request per model with the whole fetch set."""
+    from graupel.data.open_meteo import VARIABLE_TO_OPENMETEO
+    from graupel.data.quantities import QUANTITIES, fetch_set
+    from graupel.data.storage import Storage
+
+    storage = Storage(":memory:")
+    storage.update_settings({"mode": mode})
+    config.layout_id = layout_id
+    config.cloud_model_chain = []
+    await ForecastService(client=mock_client, storage=storage).get_merged_forecast(config)
+    storage.close()
+
+    registered = {
+        VARIABLE_TO_OPENMETEO[q] for q in fetch_set() if QUANTITIES[q].source == "hourly"
+    }
+    requested = {}
+    for params in mock_client.model_calls:
+        if params.get("models") in ("icon_d2", "icon_eu"):
+            requested.setdefault(params["models"], []).append(set(params["hourly"].split(",")))
+    assert requested["icon_d2"] == [registered]
+    # ICON-EU does not list LPI in `supported_variables`: not requested.
+    assert requested["icon_eu"] == [registered - {"lightning_potential"}]

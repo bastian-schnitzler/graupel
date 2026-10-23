@@ -6,7 +6,11 @@ import type {
   DetailedCloudForecast,
   VerticalCloudTransition,
   MeteogramConfig,
+  ModelAvailability,
+  ModelMetadata,
 } from "../types";
+import { getModelMeta } from "../components/modelChain/modelChainLayout";
+import { missingDerivedSources } from "../quantities/derivedQuantities";
 import {
   mergeForecastSegments,
   mergeVerticalCloudSegments,
@@ -16,21 +20,7 @@ import {
   getBoundaryTimestamp,
   normalizeTimestamp,
 } from "../utils/timeline";
-
-export const FORECAST_VARIABLES = [
-  "temperature",
-  "apparent_temperature",
-  "wind_speed",
-  "wind_gusts",
-  "wind_direction",
-  "cloud_cover",
-  "precipitation",
-  "precipitation_probability",
-  "weather_code",
-  "cape",
-  "convective_inhibition",
-  "lightning_potential",
-];
+import { hourlyQuantityIds, isOptionalQuantity } from "../quantities/registry";
 
 /**
  * Calculates the active timeline end timestamp constrained by the outermost
@@ -61,15 +51,7 @@ export function logTimelineDiagnostics(
   if (!diagnostics) return;
   Object.values(diagnostics).forEach((modelDiagnostic) => {
     Object.values(modelDiagnostic.variables).forEach((coverage: any) => {
-      if (
-        !coverage.complete &&
-        ![
-          "cape",
-          "convective_inhibition",
-          "lightning_potential",
-          "weather_code",
-        ].includes(coverage.variable)
-      ) {
+      if (!coverage.complete && !isOptionalQuantity(coverage.variable)) {
         console.warn(
           `${modelDiagnostic.model} / ${coverage.variable}: expected data through ` +
             `${coverage.expected_last_timestamp} before boundary ` +
@@ -96,7 +78,7 @@ export function resolveActiveCombinedForecast(
   return mergeForecastSegments(
     activeModelChain,
     forecastResponse.model_forecasts,
-    FORECAST_VARIABLES,
+    hourlyQuantityIds(),
     forecastResponse.forecast_start_time,
     forecastResponse.timeline_start,
     activeTimelineEnd,
@@ -196,4 +178,137 @@ export function calculateMeteogramScale({
     return 1;
   }
   return Math.min(1, Math.max(0.25, availableHeight / naturalHeight));
+}
+
+/**
+ * Moves each boundary to the hours the model's latest run delivers, so the
+ * next model starts right there. Boundaries stay non-decreasing; models
+ * without availability info keep their horizon.
+ */
+export function capChainToAvailability(
+  chain: WeatherModel[],
+  availability?: Record<string, ModelAvailability>,
+): WeatherModel[] {
+  if (!availability || Object.keys(availability).length === 0) return chain;
+  let previous = 0;
+  let changed = false;
+  const capped = chain.map((model) => {
+    let horizon = model.max_forecast_horizon_hours;
+    const available = availability[model.name]?.available_hours;
+    if (typeof available === "number") {
+      horizon = Math.min(horizon, available);
+    }
+    horizon = Math.max(horizon, previous);
+    previous = horizon;
+    if (horizon === model.max_forecast_horizon_hours) return model;
+    changed = true;
+    return { ...model, max_forecast_horizon_hours: horizon };
+  });
+  return changed ? capped : chain;
+}
+
+/**
+ * Applies a chain emitted by dragging the capped chain back to the requested
+ * (uncapped) chain: only boundaries the user moved change, all others keep
+ * their requested horizon so a later, longer run can extend them again.
+ */
+export function mergeDraggedChain(
+  requested: WeatherModel[],
+  capped: WeatherModel[],
+  dragged: WeatherModel[],
+): WeatherModel[] {
+  if (requested.length !== dragged.length || capped.length !== dragged.length) {
+    return dragged;
+  }
+  return dragged.map((model, idx) =>
+    model.max_forecast_horizon_hours === capped[idx].max_forecast_horizon_hours
+      ? requested[idx]
+      : model,
+  );
+}
+
+/**
+ * Metadata for the Meteogram View chain cards: "Max" and the drag limit show
+ * the hours the latest run delivers, and the run time is attached.
+ */
+export function applyAvailabilityToMetadata(
+  availableModels: Record<string, ModelMetadata>,
+  chain: WeatherModel[],
+  availability?: Record<string, ModelAvailability>,
+  forecastStartTime?: string | null,
+): Record<string, ModelMetadata> {
+  if (!availability || Object.keys(availability).length === 0) {
+    return availableModels;
+  }
+  const result = { ...availableModels };
+  const displayedChain = capChainToAvailability(chain, availability);
+  chain.forEach((model, idx) => {
+    const info = availability[model.name];
+    if (!info) return;
+    const meta = getModelMeta(model, availableModels);
+    const capability =
+      meta?.max_forecast_horizon_hours ||
+      meta?.max_forecast_hours ||
+      model.max_forecast_horizon_hours;
+    const available =
+      typeof info.available_hours === "number"
+        ? Math.min(capability, info.available_hours)
+        : capability;
+    const overridden: ModelMetadata = {
+      ...(meta || { name: model.name }),
+      max_forecast_horizon_hours: available,
+      max_forecast_hours: available,
+      last_run_init_time: info.last_run_init_time ?? null,
+      data_end_run_init_time: info.data_end_run_init_time ?? null,
+      horizon_info: {
+        catalogue_hours: capability,
+        available_hours: available,
+        limited_by_run:
+          typeof info.available_hours === "number" &&
+          info.available_hours < capability,
+        forecast_start_time: forecastStartTime ?? null,
+        run_segments: info.run_segments ?? [],
+        run_init_time: info.last_run_init_time ?? null,
+        run_availability_time: info.last_run_availability_time ?? null,
+        slice_start_hours:
+          idx > 0 ? displayedChain[idx - 1].max_forecast_horizon_hours : 0,
+        slice_end_hours: displayedChain[idx].max_forecast_horizon_hours,
+        ensemble: info.ensemble ?? null,
+        probability_valid_until: info.probability_valid_until ?? null,
+      },
+    };
+    result[model.name] = overridden;
+    if (model.id) result[model.id] = overridden;
+  });
+  return result;
+}
+
+/**
+ * Metadata for the Meteogram View chain cards with the sources of drawn
+ * derived quantities each model delivers no data for (card warning).
+ */
+export function applyMissingSourcesToMetadata(
+  availableModels: Record<string, ModelMetadata>,
+  chain: WeatherModel[],
+  drawnQuantities: Set<string>,
+  modelForecasts?: Record<string, DataPoint[]>,
+): Record<string, ModelMetadata> {
+  if (!modelForecasts) return availableModels;
+  let result = availableModels;
+  chain.forEach((model) => {
+    const missing = missingDerivedSources(
+      drawnQuantities,
+      modelForecasts[model.name],
+    );
+    if (missing.length === 0) return;
+    if (result === availableModels) result = { ...availableModels };
+    const meta = getModelMeta(model, availableModels);
+    const withWarning: ModelMetadata = {
+      ...(meta || model),
+      missing_sources: missing,
+    };
+    result[model.name] = withWarning;
+    if (model.id) result[model.id] = withWarning;
+  });
+  return result;
 }

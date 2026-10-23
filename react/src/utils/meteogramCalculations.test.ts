@@ -2,6 +2,17 @@ import { describe, it, expect } from "vitest";
 import { calculateAccumulatedPrecipitation } from "./meteogramCalculations";
 
 describe("calculateAccumulatedPrecipitation", () => {
+  it("sums only contiguous snowy precipitation bars when snow amounts are masked by wet hours", () => {
+    const hours = [0, 1, 2, 3, 4].map((hour) => Date.parse("2026-01-01T00:00:00Z") + hour * 3600000);
+    const precipitation = [1, 2, 3, 0, 1];
+    const snowfall = [0.5, 1, 0, 2, 0.5];
+    const whiteBars = snowfall.map((snow, index) => precipitation[index] > 0 && snow > 0 ? snow : null);
+    expect(calculateAccumulatedPrecipitation(0, whiteBars, hours)).toBe(1.5);
+    expect(calculateAccumulatedPrecipitation(1, whiteBars, hours)).toBe(1.5);
+    expect(calculateAccumulatedPrecipitation(2, whiteBars, hours)).toBeNull();
+    expect(calculateAccumulatedPrecipitation(3, whiteBars, hours)).toBeNull();
+    expect(calculateAccumulatedPrecipitation(4, whiteBars, hours)).toBe(0.5);
+  });
   const ONE_HOUR = 3600 * 1000;
   const t0 = 1726488000000;
   const timestamps = [

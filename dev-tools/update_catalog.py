@@ -4,8 +4,15 @@ dev-tools/update_catalog.py
 
 Fetches the Open-Meteo OpenAPI specification (forecast.yml), extracts the
 models enum, probes the Open-Meteo API to determine each model's supported
-variables, forecast horizon, and vertical level support, and updates the
-application's model catalog (model_catalogue.json and model_catalog.json).
+variables, forecast horizon, and pressure levels, and merges the result into
+the application's model catalogue (graupel/models/model_catalogue.json).
+
+Unchanged entries stay byte-identical; curated fields (name, provider,
+region, resolution) are only derived for models that are new in the enum.
+
+    uv run python dev-tools/update_catalog.py                     # full run
+    uv run python dev-tools/update_catalog.py --horizons-only     # horizons
+    uv run python dev-tools/update_catalog.py --short-names-only  # offline
 """
 
 import asyncio
@@ -14,10 +21,20 @@ import logging
 import os
 import re
 import sys
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 import yaml
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from graupel.data.model_short_names import short_name_for  # noqa: E402
+from graupel.data.open_meteo import model_meta_path  # noqa: E402
+from graupel.data.quantities import (  # noqa: E402
+    SOURCE_HOURLY,
+    all_quantities,
+    catalogued_quantities,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,6 +42,11 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("update_catalog")
+
+SINGLE_RUNS_URL = "https://single-runs-api.open-meteo.com/v1/forecast"
+MODEL_META_URL = "https://api.open-meteo.com/data/{path}/static/meta.json"
+# Runs compared per model: one day of runs (hourly models: 24 requests).
+MAX_RUNS_TO_MEASURE = 24
 
 OPENAPI_YAML_URL = "https://raw.githubusercontent.com/open-meteo/open-meteo/main/openapi/forecast.yml"
 API_BASE_URL = "https://api.open-meteo.com/v1/forecast"
@@ -35,50 +57,79 @@ LOCAL_YAML_PATH = os.path.join(SCRIPT_DIR, "forecast.yml")
 OUT_CATALOGUE_JSON = os.path.join(
     PROJECT_ROOT, "graupel", "models", "model_catalogue.json"
 )
-OUT_COMPAT_CATALOG_JSON = os.path.join(
-    PROJECT_ROOT, "graupel", "models", "model_catalog.json"
-)
 
-STANDARD_VARIABLES = [
-    "temperature",
-    "wind_speed",
-    "wind_gusts",
-    "wind_direction",
-    "cloud_cover",
-    "precipitation",
-    "precipitation_probability",
+# Probe every downloadable hourly quantity of the registry (system.md §9.3);
+# only the catalogued ones are stored in `supported_variables`.
+PROBE_QUANTITIES = [
+    q
+    for q in all_quantities()
+    if q.source == SOURCE_HOURLY and q.downloadable and q.api_name
 ]
+CATALOGUED_QUANTITIES = catalogued_quantities()
+# Rejected by some model endpoints: probe again without them.
+RETRY_WITHOUT = {q.api_name for q in PROBE_QUANTITIES if q.retry_without}
+# Always listed, even when a probe returns no values for them.
+CORE_VARIABLES = ("temperature", "wind_speed", "cloud_cover", "precipitation")
 
-API_VAR_TO_STANDARD = {
-    "temperature_2m": "temperature",
-    "wind_speed_10m": "wind_speed",
-    "wind_gusts_10m": "wind_gusts",
-    "wind_direction_10m": "wind_direction",
-    "cloud_cover": "cloud_cover",
-    "precipitation": "precipitation",
-    "precipitation_probability": "precipitation_probability",
-    "cape": "cape",
-    "convective_inhibition": "convective_inhibition",
-    "lightning_potential": "lightning_potential",
-}
-
-DEFAULT_PRESSURE_LEVELS = [
+# Every pressure level of the forecast API; a model supports the levels
+# with cloud cover data.
+PRESSURE_LEVELS = [
     1000,
+    975,
     950,
     925,
     900,
+    875,
     850,
+    825,
     800,
+    775,
+    750,
+    725,
     700,
+    675,
+    650,
+    625,
     600,
+    575,
+    550,
+    525,
     500,
+    475,
+    450,
+    425,
     400,
+    375,
+    350,
+    325,
     300,
+    275,
     250,
+    225,
     200,
+    175,
     150,
+    125,
     100,
+    70,
+    50,
+    40,
+    30,
+    20,
+    15,
+    10,
 ]
+
+# Curated per model: kept from the existing catalogue, derived only for
+# models that are new in the OpenAPI enum.
+CURATED_FIELDS = (
+    "name",
+    "provider",
+    "region",
+    "spatial_resolution_km",
+    "active",
+)
+
 
 TEST_COORDS_MAP = {
     "cma": (39.9, 116.4),  # Beijing, China
@@ -315,7 +366,7 @@ MODEL_METADATA_REGISTRY: Dict[str, Dict[str, Any]] = {
         "name": "GEM HRDPS West",
         "provider": "GEM",
         "region": "Western Canada",
-        "spatial_resolution_km": 2.5,
+        "spatial_resolution_km": 1.0,  # experimental 1 km grid (ECCC)
         "max_forecast_hours": 48,
     },
     "meteofrance_seamless": {
@@ -595,151 +646,214 @@ async def probe_model_properties(
     client: httpx.AsyncClient,
     model_id: str,
     semaphore: asyncio.Semaphore,
-) -> Dict[str, Any]:
-    """Queries Open-Meteo API to discover variable support, horizon, temporal resolution, and spatial grid resolution."""
+    probe_grid: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """Queries the forecast API for a model's variables and pressure levels.
+
+    Returns None when the model gives no usable answer, so the caller keeps
+    its existing catalogue entry. `probe_grid` also measures the grid
+    spacing (only needed for models that are new in the catalogue).
+    """
     async with semaphore:
         lat, lon = get_test_coordinates(model_id)
-        api_vars = list(API_VAR_TO_STANDARD.keys())
-
-        params = {
-            "latitude": lat,
-            "longitude": lon,
-            "models": model_id,
-            "forecast_hours": 384,
-            "hourly": ",".join(
-                api_vars
-                + ["cloud_cover_1000hPa", "geopotential_height_1000hPa"]
-            ),
-        }
-
-        detected: Dict[str, Any] = {
-            "supported_variables": list(STANDARD_VARIABLES),
-            "max_forecast_hours": None,
-            "temporal_resolution_hours": 1,
-            "spatial_resolution_km": None,
-            "supports_vcloud": False,
-        }
+        level_vars = [f"cloud_cover_{level}hPa" for level in PRESSURE_LEVELS]
+        api_vars = [q.api_name for q in PROBE_QUANTITIES]
+        data: Optional[Dict[str, Any]] = None
 
         for attempt in range(3):
+            params = {
+                "latitude": lat,
+                "longitude": lon,
+                "models": model_id,
+                "forecast_hours": 384,
+                "hourly": ",".join(api_vars + level_vars),
+            }
             try:
                 resp = await client.get(API_BASE_URL, params=params)
-                if resp.status_code == 429:
-                    await asyncio.sleep(0.5 * (attempt + 1))
-                    continue
-                if resp.status_code == 200:
-                    data = resp.json()
-                    hourly = data.get("hourly", {})
-
-                    # 1. Determine supported variables & horizon
-                    supported: List[str] = []
-                    max_valid_pts = 0
-
-                    for api_var, std_var in API_VAR_TO_STANDARD.items():
-                        vals = hourly.get(api_var, [])
-                        non_null = sum(1 for v in vals if v is not None)
-                        if non_null > 0:
-                            supported.append(std_var)
-                            max_valid_pts = max(max_valid_pts, non_null)
-
-                    if supported:
-                        detected["supported_variables"] = supported
-
-                    if max_valid_pts > 0:
-                        detected["max_forecast_hours"] = max_valid_pts
-
-                    # 2. Determine temporal resolution from timestamps
-                    time_points = hourly.get("time", [])
-                    if len(time_points) >= 2:
-                        try:
-                            from datetime import datetime
-
-                            t0 = datetime.fromisoformat(time_points[0])
-                            t1 = datetime.fromisoformat(time_points[1])
-                            diff_hours = (t1 - t0).total_seconds() / 3600.0
-                            if diff_hours > 0:
-                                detected["temporal_resolution_hours"] = (
-                                    1
-                                    if diff_hours >= 1
-                                    else round(diff_hours, 2)
-                                )
-                        except Exception:
-                            pass
-
-                    # 3. Check vertical pressure levels
-                    cc_1000 = hourly.get("cloud_cover_1000hPa", [])
-                    gh_1000 = hourly.get("geopotential_height_1000hPa", [])
-                    if any(v is not None for v in cc_1000) or any(
-                        v is not None for v in gh_1000
-                    ):
-                        detected["supports_vcloud"] = True
-
-                    # 4. Probe spatial grid spacing dynamically via API grid node snapping
-                    base_lat = data.get("latitude")
-                    if base_lat is not None:
-                        for step in [
-                            0.005,
-                            0.01,
-                            0.015,
-                            0.02,
-                            0.025,
-                            0.03,
-                            0.05,
-                            0.07,
-                            0.1,
-                            0.15,
-                            0.2,
-                            0.25,
-                            0.4,
-                            0.5,
-                        ]:
-                            try:
-                                r_step = await client.get(
-                                    API_BASE_URL,
-                                    params={
-                                        "latitude": lat + step,
-                                        "longitude": lon,
-                                        "models": model_id,
-                                        "hourly": "temperature_2m",
-                                    },
-                                )
-                                if r_step.status_code == 200:
-                                    d_step = r_step.json()
-                                    new_lat = d_step.get("latitude")
-                                    if (
-                                        new_lat is not None
-                                        and abs(new_lat - base_lat) > 0.0005
-                                    ):
-                                        detected["spatial_resolution_km"] = (
-                                            round(
-                                                abs(new_lat - base_lat)
-                                                * 111.19,
-                                                1,
-                                            )
-                                        )
-                                        break
-                            except Exception:
-                                pass
-
-                    logger.info(
-                        f"Model {model_id:30s} -> Spatial: {detected['spatial_resolution_km']} km | "
-                        f"Temporal: {detected['temporal_resolution_hours']}h | "
-                        f"Horizon: {detected['max_forecast_hours']}h | "
-                        f"Vars: {len(detected['supported_variables'])} | VCloud: {detected['supports_vcloud']}"
-                    )
-                    break
-                else:
-                    logger.debug(
-                        f"Model {model_id:30s} returned HTTP {resp.status_code}"
-                    )
-                    break
             except Exception as e:
                 logger.debug(
                     f"Probe request failed for model '{model_id}': {e}"
                 )
                 if attempt < 2:
                     await asyncio.sleep(0.5)
+                continue
+            if resp.status_code == 429:
+                await asyncio.sleep(0.5 * (attempt + 1))
+                continue
+            if resp.status_code == 400 and RETRY_WITHOUT & set(api_vars):
+                api_vars = [v for v in api_vars if v not in RETRY_WITHOUT]
+                continue
+            if resp.status_code == 200:
+                data = resp.json()
+            else:
+                logger.debug(
+                    f"Model {model_id:30s} returned HTTP {resp.status_code}"
+                )
+            break
 
+        if data is None:
+            logger.warning(f"Model {model_id}: probe failed")
+            return None
+        hourly = data.get("hourly", {})
+
+        def non_null(name: str) -> int:
+            return sum(1 for v in hourly.get(name) or [] if v is not None)
+
+        # 1. Variables with data, and the remaining hours as a fallback
+        # horizon for models without a measurable run length
+        counts = {q.id: non_null(q.api_name) for q in PROBE_QUANTITIES}
+        detected: Dict[str, Any] = {
+            "variables": {qid for qid, n in counts.items() if n > 0},
+            "max_forecast_hours": max(counts.values(), default=0) or None,
+            "temporal_resolution_hours": 1,
+            "spatial_resolution_km": None,
+            "pressure_levels_hpa": [
+                level
+                for level in PRESSURE_LEVELS
+                if non_null(f"cloud_cover_{level}hPa") > 0
+            ],
+        }
+
+        # 2. Temporal resolution from timestamps
+        time_points = hourly.get("time", [])
+        if len(time_points) >= 2:
+            try:
+                t0 = datetime.fromisoformat(time_points[0])
+                t1 = datetime.fromisoformat(time_points[1])
+                diff_hours = (t1 - t0).total_seconds() / 3600.0
+                if diff_hours > 0:
+                    detected["temporal_resolution_hours"] = (
+                        1 if diff_hours >= 1 else round(diff_hours, 2)
+                    )
+            except Exception:
+                pass
+
+        # 3. Spatial grid spacing via API grid node snapping
+        base_lat = data.get("latitude")
+        if probe_grid and base_lat is not None:
+            for step in [
+                0.005,
+                0.01,
+                0.015,
+                0.02,
+                0.025,
+                0.03,
+                0.05,
+                0.07,
+                0.1,
+                0.15,
+                0.2,
+                0.25,
+                0.4,
+                0.5,
+            ]:
+                try:
+                    r_step = await client.get(
+                        API_BASE_URL,
+                        params={
+                            "latitude": lat + step,
+                            "longitude": lon,
+                            "models": model_id,
+                            "hourly": "temperature_2m",
+                        },
+                    )
+                    if r_step.status_code == 200:
+                        new_lat = r_step.json().get("latitude")
+                        if (
+                            new_lat is not None
+                            and abs(new_lat - base_lat) > 0.0005
+                        ):
+                            detected["spatial_resolution_km"] = round(
+                                abs(new_lat - base_lat) * 111.19, 1
+                            )
+                            break
+                except Exception:
+                    pass
+
+        missing = [q.id for q in PROBE_QUANTITIES if not counts[q.id]]
+        logger.info(
+            f"Model {model_id:30s} -> "
+            f"Horizon: {detected['max_forecast_hours']}h | "
+            f"Levels: {len(detected['pressure_levels_hpa'])} | "
+            f"Without: {', '.join(missing) or '-'}"
+        )
         return detected
+
+
+async def probe_max_run_hours(
+    client: httpx.AsyncClient,
+    model_id: str,
+    semaphore: asyncio.Semaphore,
+) -> Optional[int]:
+    """Measures the longest run of the last day via the Single Runs API.
+
+    The forecast API mixes runs and counts hours from "now", so its valid
+    hours depend on the run age at probe time. A model's capability is the
+    length of its longest run (e.g. ECMWF IFS 00Z 360h vs 06Z 144h, ICON-EU
+    06Z 120h vs 09Z 30h). Returns None for blends or unknown models.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    path = model_meta_path(model_id)
+    if path is None:
+        return None
+    lat, lon = get_test_coordinates(model_id)
+    async with semaphore:
+        try:
+            resp = await client.get(MODEL_META_URL.format(path=path))
+            if resp.status_code != 200:
+                return None
+            meta = resp.json()
+        except Exception:
+            return None
+        init = meta.get("last_run_initialisation_time")
+        if not isinstance(init, (int, float)):
+            return None
+        interval = int(meta.get("update_interval_seconds") or 21600)
+        # Coarser models are interpolated to hourly and padded at the end by
+        # up to one native step; round down to the native resolution.
+        native_hours = max(
+            1, int(meta.get("temporal_resolution_seconds") or 3600) // 3600
+        )
+        latest = datetime.fromtimestamp(init, timezone.utc)
+        count = min(MAX_RUNS_TO_MEASURE, max(1, 86400 // interval))
+        longest: Optional[int] = None
+        for k in range(count):
+            run = latest - timedelta(seconds=k * interval)
+            try:
+                r = await client.get(
+                    SINGLE_RUNS_URL,
+                    params={
+                        "latitude": lat,
+                        "longitude": lon,
+                        "models": model_id,
+                        "run": run.strftime("%Y-%m-%dT%H:%M"),
+                        "hourly": "temperature_2m",
+                        "forecast_hours": 400,
+                        "timezone": "GMT",
+                    },
+                )
+                if r.status_code != 200:
+                    continue
+                hourly = r.json().get("hourly", {})
+                valid = [
+                    t
+                    for t, v in zip(
+                        hourly.get("time", []), hourly.get("temperature_2m", [])
+                    )
+                    if v is not None
+                ]
+                if not valid:
+                    continue
+                last = datetime.fromisoformat(valid[-1]).replace(
+                    tzinfo=timezone.utc
+                )
+                hours = int((last - run).total_seconds() // 3600)
+                hours -= hours % native_hours
+                longest = hours if longest is None else max(longest, hours)
+            except Exception:
+                continue
+        return longest
 
 
 def clean_display_name(model_id: str) -> str:
@@ -752,149 +866,222 @@ def clean_display_name(model_id: str) -> str:
     return " ".join(capitalized)
 
 
-async def build_catalog(yaml_models: List[str]) -> List[Dict[str, Any]]:
-    """Builds the complete catalogue covering all models in the OpenAPI YAML."""
-    logger.info(f"Probing {len(yaml_models)} models via Open-Meteo API...")
-    semaphore = asyncio.Semaphore(5)  # Rate limiting concurrency
+def new_entry_fields(
+    model_id: str,
+    probed: Dict[str, Any],
+    website_labels: Dict[str, str],
+) -> Dict[str, Any]:
+    """Curated fields for a model that is not yet in the catalogue."""
+    meta = MODEL_METADATA_REGISTRY.get(model_id, {})
+    name = (
+        website_labels.get(model_id)
+        or meta.get("name")
+        or clean_display_name(model_id)
+    )
+    # Nominal resolution from the name or registry, else the probed grid
+    spatial_res = (
+        parse_nominal_resolution(name)
+        or meta.get("spatial_resolution_km")
+        or probed.get("spatial_resolution_km")
+        or 10.0
+    )
+    return {
+        "name": name,
+        "provider": meta.get("provider") or "National Weather Service",
+        "region": meta.get("region") or "Global",
+        "spatial_resolution_km": float(spatial_res),
+        "active": True,
+    }
 
-    async with httpx.AsyncClient(timeout=25.0) as client:
-        website_labels = await fetch_official_website_model_labels(client)
-        tasks = [
-            probe_model_properties(client, model_id, semaphore)
-            for model_id in yaml_models
-        ]
-        probe_results = await asyncio.gather(*tasks)
 
-    catalogue: List[Dict[str, Any]] = []
+def merge_entry(
+    model_id: str,
+    existing: Optional[Dict[str, Any]],
+    probed: Dict[str, Any],
+    run_hours: Optional[int],
+    website_labels: Dict[str, str],
+) -> Dict[str, Any]:
+    """Catalogue entry from the probe, keeping unchanged values as they are.
 
-    for model_id, probed in zip(yaml_models, probe_results):
+    Curated fields come from the existing entry. Probed fields replace it
+    only when their value changes, so unchanged entries stay byte-identical
+    (variable order included).
+    """
+    old = existing or {}
+    curated = (
+        {key: old[key] for key in CURATED_FIELDS}
+        if existing
+        else new_entry_fields(model_id, probed, website_labels)
+    )
+
+    found = set(probed["variables"]) | set(CORE_VARIABLES)
+    variables = [qid for qid in CATALOGUED_QUANTITIES if qid in found]
+    if existing and set(old["supported_variables"]) == set(variables):
+        variables = old["supported_variables"]
+
+    levels = probed["pressure_levels_hpa"]
+    if existing and sorted(old["pressure_levels_hpa"]) == sorted(levels):
+        levels = old["pressure_levels_hpa"]
+
+    # Horizon: longest measured run. Without one (blends) keep the
+    # catalogue value; new models fall back to registry or remaining hours.
+    if run_hours:
+        hours = run_hours
+    elif existing:
+        hours = old["max_forecast_hours"]
+    else:
         meta = MODEL_METADATA_REGISTRY.get(model_id, {})
-
-        # Official display name from website options, or registry, or clean name
-        official_name = (
-            website_labels.get(model_id)
-            or meta.get("name")
-            or clean_display_name(model_id)
-        )
-        provider = meta.get("provider") or "National Weather Service"
-        region = meta.get("region") or "Global"
-
-        # Spatial resolution:
-        # 1. Nominal from official name or registry
-        nominal_res = parse_nominal_resolution(official_name) or meta.get(
-            "spatial_resolution_km"
-        )
-        # 2. Live probed grid step from Open-Meteo API
-        probed_res = probed.get("spatial_resolution_km")
-        if nominal_res is not None:
-            spatial_res = nominal_res
-        elif probed_res is not None:
-            spatial_res = probed_res
-        else:
-            spatial_res = 10.0
-
-        # Temporal resolution from live API response
-        temporal_res = (
-            probed.get("temporal_resolution_hours")
-            or meta.get("temporal_resolution_hours")
-            or 1
-        )
-
-        # Horizon: live probed horizon, or verified registry value if higher / stable regression
         reg_hours = meta.get("max_forecast_hours")
         probed_hours = probed.get("max_forecast_hours")
         if reg_hours and probed_hours:
-            final_hours = max(reg_hours, probed_hours)
+            hours = max(reg_hours, probed_hours)
         else:
-            final_hours = reg_hours or probed_hours or 48
+            hours = reg_hours or probed_hours or 48
 
-        # Variables: ensure supported_variables does not contain non-supported vars
-        final_vars = probed.get("supported_variables") or list(
-            STANDARD_VARIABLES
-        )
-        for core_var in (
-            "temperature",
-            "wind_speed",
-            "cloud_cover",
-            "precipitation",
-        ):
-            if core_var not in final_vars:
-                final_vars.append(core_var)
+    vcloud = bool(levels)
+    return {
+        "id": model_id,
+        "name": curated["name"],
+        "short_name": short_name_for(model_id),
+        "provider": curated["provider"],
+        "region": curated["region"],
+        "spatial_resolution_km": curated["spatial_resolution_km"],
+        "temporal_resolution_hours": probed.get("temporal_resolution_hours")
+        or old.get("temporal_resolution_hours")
+        or 1,
+        "max_forecast_hours": int(hours),
+        "supported_variables": variables,
+        "active": curated["active"],
+        "supports_vertical_cloud_profile": vcloud,
+        "supports_pressure_level_cloud_cover": vcloud,
+        "supports_geopotential_height": vcloud,
+        "pressure_levels_hpa": levels,
+    }
 
-        supports_vcloud = (
-            meta.get("supports_vcloud")
-            or probed.get("supports_vcloud")
-            or False
-        )
-        pressure_levels = (
-            list(DEFAULT_PRESSURE_LEVELS) if supports_vcloud else []
-        )
 
-        entry = {
-            "id": model_id,
-            "name": official_name,
-            "provider": provider,
-            "region": region,
-            "spatial_resolution_km": float(spatial_res),
-            "temporal_resolution_hours": temporal_res,
-            "max_forecast_hours": int(final_hours),
-            "supported_variables": final_vars,
-            "active": True,
-            "supports_vertical_cloud_profile": supports_vcloud,
-            "supports_pressure_level_cloud_cover": supports_vcloud,
-            "supports_geopotential_height": supports_vcloud,
-            "pressure_levels_hpa": pressure_levels,
-        }
-        catalogue.append(entry)
+async def build_catalog(
+    yaml_models: List[str],
+    existing: List[Dict[str, Any]],
+    client: httpx.AsyncClient,
+) -> List[Dict[str, Any]]:
+    """Probes all models and merges the results into the catalogue.
+
+    Order and models of the existing catalogue are kept; models new in the
+    OpenAPI enum are appended. A model whose probe fails keeps its entry
+    (a new one is left out), so a full run never loses models.
+    """
+    by_id = {item["id"]: item for item in existing}
+    model_ids = [item["id"] for item in existing] + [
+        m for m in yaml_models if m not in by_id
+    ]
+    for model_id in by_id:
+        if model_id not in yaml_models:
+            logger.warning(f"Model {model_id} is no longer in forecast.yml")
+    logger.info(f"Probing {len(model_ids)} models via Open-Meteo API...")
+    semaphore = asyncio.Semaphore(5)  # Rate limiting concurrency
+
+    probe_results = await asyncio.gather(
+        *[
+            probe_model_properties(
+                client, model_id, semaphore, probe_grid=model_id not in by_id
+            )
+            for model_id in model_ids
+        ]
+    )
+    run_hours = await asyncio.gather(
+        *[
+            probe_max_run_hours(client, model_id, semaphore)
+            for model_id in model_ids
+        ]
+    )
+    new_models = [m for m in model_ids if m not in by_id]
+    website_labels = (
+        await fetch_official_website_model_labels(client) if new_models else {}
+    )
+
+    catalogue: List[Dict[str, Any]] = []
+    for model_id, probed, measured in zip(model_ids, probe_results, run_hours):
+        existing_entry = by_id.get(model_id)
+        if probed is None:
+            if existing_entry is None:
+                logger.warning(f"Skipping new model {model_id}")
+                continue
+            catalogue.append(existing_entry)
+            continue
+        catalogue.append(
+            merge_entry(
+                model_id, existing_entry, probed, measured, website_labels
+            )
+        )
 
     logger.info(f"Successfully compiled catalog with {len(catalogue)} models.")
     return catalogue
 
 
-def save_catalog_files(catalogue: List[Dict[str, Any]]) -> None:
-    """Writes the updated catalog to both target locations."""
+def load_catalogue() -> List[Dict[str, Any]]:
+    if not os.path.exists(OUT_CATALOGUE_JSON):
+        return []
+    with open(OUT_CATALOGUE_JSON, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def dump_catalogue(catalogue: List[Dict[str, Any]]) -> str:
+    return json.dumps(catalogue, indent=2, ensure_ascii=False) + "\n"
+
+
+def save_catalogue(catalogue: List[Dict[str, Any]]) -> None:
     os.makedirs(os.path.dirname(OUT_CATALOGUE_JSON), exist_ok=True)
     with open(OUT_CATALOGUE_JSON, "w", encoding="utf-8") as f:
-        json.dump(catalogue, f, indent=2)
-        f.write("\n")
+        f.write(dump_catalogue(catalogue))
     logger.info(f"Updated {OUT_CATALOGUE_JSON} with {len(catalogue)} entries.")
 
-    compat_list = []
-    for item in catalogue:
-        compat_item = {
-            "id": item["id"],
-            "name": item["name"],
-            "spatial_resolution": item["spatial_resolution_km"],
-            "temporal_resolution": item["temporal_resolution_hours"],
-            "max_forecast_horizon_hours": item["max_forecast_hours"],
-            "supported_variables": item["supported_variables"],
-            "geographical_coverage": item["region"],
-            "supports_vertical_cloud_profile": item[
-                "supports_vertical_cloud_profile"
-            ],
-            "supports_pressure_level_cloud_cover": item[
-                "supports_pressure_level_cloud_cover"
-            ],
-            "supports_geopotential_height": item[
-                "supports_geopotential_height"
-            ],
-            "pressure_levels_hpa": item["pressure_levels_hpa"],
-        }
-        compat_list.append(compat_item)
 
-    with open(OUT_COMPAT_CATALOG_JSON, "w", encoding="utf-8") as f:
-        json.dump(compat_list, f, indent=2)
-        f.write("\n")
-    logger.info(
-        f"Updated {OUT_COMPAT_CATALOG_JSON} with {len(compat_list)} entries."
-    )
+async def update_horizons_only() -> int:
+    """Re-measures max run lengths and updates only the horizons."""
+    catalogue = load_catalogue()
+    semaphore = asyncio.Semaphore(5)
+    async with httpx.AsyncClient(timeout=25.0) as client:
+        measured = await asyncio.gather(
+            *[
+                probe_max_run_hours(client, item["id"], semaphore)
+                for item in catalogue
+            ]
+        )
+    for item, hours in zip(catalogue, measured):
+        if hours and hours != item["max_forecast_hours"]:
+            logger.info(
+                f"{item['id']:35s} {item['max_forecast_hours']:4d}h -> {hours:4d}h"
+            )
+            item["max_forecast_hours"] = hours
+    save_catalogue(catalogue)
+    return 0
+
+
+def update_short_names_only() -> int:
+    """Copies the curated nicknames into the catalogue (offline)."""
+    updated = []
+    for item in load_catalogue():
+        entry = {}
+        for key, value in item.items():
+            if key != "short_name":
+                entry[key] = value
+            if key == "name":
+                entry["short_name"] = short_name_for(item.get("id"))
+        updated.append(entry)
+    save_catalogue(updated)
+    return 0
 
 
 async def main_async() -> int:
+    if "--horizons-only" in sys.argv:
+        return await update_horizons_only()
+    if "--short-names-only" in sys.argv:
+        return update_short_names_only()
     yaml_content = fetch_openapi_yaml()
     yaml_models = extract_models_enum(yaml_content)
-    catalogue = await build_catalog(yaml_models)
-    save_catalog_files(catalogue)
+    async with httpx.AsyncClient(timeout=25.0) as client:
+        catalogue = await build_catalog(yaml_models, load_catalogue(), client)
+    save_catalogue(catalogue)
     logger.info("Catalog sync completed successfully.")
     return 0
 

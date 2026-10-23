@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import List, Dict, Optional, Any
 import pydantic
 from pydantic import BaseModel, Field, model_validator
@@ -16,6 +17,7 @@ class Location(BaseModel):
 class WeatherModel(BaseModel):
     id: Optional[str] = None
     name: str  # e.g., "ICON-D2", "ICON-EU", "GFS"
+    short_name: Optional[str] = None  # nickname for the model header
     provider: Optional[str] = None
     region: Optional[str] = None
     geographical_coverage: Optional[str] = None
@@ -94,6 +96,17 @@ class MeteogramConfig(BaseModel):
     main_model_chain: Optional[List[WeatherModel]] = None
     cloud_model_chain: Optional[List[WeatherModel]] = None
     position: Optional[int] = None
+    # Meteogram configuration (layout) id; None = global layout (system.md §4.3).
+    layout_id: Optional[str] = None
+    # Display name of the location, e.g. "INSB"; None = place name (§16.12).
+    location_name_override: Optional[str] = None
+
+    @pydantic.field_validator("location_name_override")
+    @classmethod
+    def blank_override_is_none(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return value.strip() or None
 
     @pydantic.model_validator(mode="before")
     @classmethod
@@ -236,6 +249,70 @@ class ModelTimelineDiagnostics(BaseModel):
     variables: Dict[str, VariableTimelineCoverage] = Field(default_factory=dict)
 
 
+class RunSegment(BaseModel):
+    """Hours of a model series that come from one run (UTC instants).
+
+    ``valid_from``/``valid_until`` are None at the open ends of the series.
+    """
+
+    run_init_time: str
+    valid_from: Optional[str] = None
+    valid_until: Optional[str] = None
+    # Length of the run itself (last sample - init), native resolution.
+    run_length_hours: Optional[int] = None
+
+
+class EnsembleRunInfo(BaseModel):
+    """Newest run of the ensemble delivering a model's precipitation
+    probability, as published in the ensemble's ``meta.json``."""
+
+    model_id: str
+    run_init_time: Optional[str] = None
+    run_availability_time: Optional[str] = None
+    # Exclusive end of the newest ensemble run's data.
+    data_end_time: Optional[str] = None
+    update_interval_hours: Optional[float] = None
+
+
+class ModelAvailability(BaseModel):
+    """Data actually delivered by a model's latest runs for one forecast.
+
+    ``available_hours`` counts hours from ``forecast_start_time`` through the
+    last valid sample; ``None`` means data reaches the end of the requested
+    window, so the model needs no cap.
+    """
+
+    model: str
+    model_id: Optional[str] = None
+    chain: str  # "main" or "cloud"
+    available_hours: Optional[int] = None
+    valid_until: Optional[str] = None  # exclusive end of the available data
+    last_run_init_time: Optional[str] = None
+    last_run_availability_time: Optional[str] = None
+    # Set only when Open-Meteo mixes runs: the older run delivering the end.
+    data_end_run_init_time: Optional[str] = None
+    # Runs the series is composed of, newest first (Open-Meteo overwrites
+    # only the hours a new run computes).
+    run_segments: List[RunSegment] = Field(default_factory=list)
+    # Ensemble behind ``precipitation_probability`` and the exclusive end of
+    # the last valid probability sample (main chain only).
+    ensemble: Optional[EnsembleRunInfo] = None
+    probability_valid_until: Optional[str] = None
+
+
+class AutoChainInfo(BaseModel):
+    """Auto chain a normal-mode forecast used (system.md §3.3, §6.3)."""
+
+    region_id: Optional[str] = None
+    region_name: Optional[str] = None
+    resolution_reason: str
+    # Chains actually stitched: models without data are already dropped.
+    main_model_chain: List[WeatherModel] = Field(default_factory=list)
+    cloud_model_chain: List[WeatherModel] = Field(default_factory=list)
+    dropped_models: List[str] = Field(default_factory=list)
+    dropped_cloud_models: List[str] = Field(default_factory=list)
+
+
 class HarmonizedForecastResponse(BaseModel):
     combined_forecast: List[DataPoint]
     model_forecasts: Dict[str, List[DataPoint]]
@@ -254,6 +331,21 @@ class HarmonizedForecastResponse(BaseModel):
     user_timezone: Optional[str] = None
     timeline_diagnostics: Dict[str, ModelTimelineDiagnostics] = Field(
         default_factory=dict
+    )
+    # Keyed by model name; Meteogram View caps each chain to these hours.
+    model_availability: Dict[str, ModelAvailability] = Field(
+        default_factory=dict
+    )
+    cloud_model_availability: Dict[str, ModelAvailability] = Field(
+        default_factory=dict
+    )
+    # Set only for auto chain (normal mode) forecasts.
+    auto_chain: Optional[AutoChainInfo] = None
+    # UTC instant the forecast was generated; drawn below the meteogram.
+    generated_at: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
     )
 
 

@@ -47,23 +47,6 @@ export function resolveAppBoot(list: MeteogramConfig[]): AppBootResult {
 }
 
 /**
- * Merges a saved configuration response with user edits, preserving elevation if missing in response.
- */
-export function mergeSavedConfigLocation(
-  saved: MeteogramConfig,
-  updatedConfig: MeteogramConfig,
-): MeteogramConfig {
-  return {
-    ...saved,
-    location: {
-      ...updatedConfig.location,
-      ...saved.location,
-      elevation: saved.location?.elevation ?? updatedConfig.location?.elevation,
-    },
-  };
-}
-
-/**
  * Filters configurations that contain at least one weather model.
  */
 export function filterMeteogramConfigs(
@@ -80,20 +63,12 @@ export function resolveHeaderLocationChange(
   selectedConfig: MeteogramConfig | null,
   newLoc: Location,
 ): {
-  updatedConfigToSave?: MeteogramConfig;
   sessionLocationOverride?: Location;
   fetchForecastArgs?: { loc: Location; configId?: string };
 } {
-  if (activeTab === "config") {
-    if (!selectedConfig) return {};
-    const updated = {
-      ...selectedConfig,
-      location: newLoc,
-    };
-    return {
-      updatedConfigToSave: updated,
-    };
-  }
+  // The header field is disabled in Config view; configurations change
+  // their location in their own field (#175).
+  if (activeTab === "config") return {};
   return {
     sessionLocationOverride: newLoc,
     fetchForecastArgs: { loc: newLoc, configId: selectedConfig?.id },

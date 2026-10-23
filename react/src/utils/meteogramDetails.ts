@@ -14,6 +14,8 @@ interface BuildFullscreenDetailRowsParams {
   hoverData: Record<string, DataPoint> | null;
   accumulatedPrecip: number | null;
   resolvedTimezone: string;
+  /** Quantities of the layout; columns without any of them are dropped. */
+  quantities?: Set<string>;
 }
 
 /**
@@ -24,6 +26,7 @@ export function buildFullscreenDetailRows({
   hoverData,
   accumulatedPrecip,
   resolvedTimezone,
+  quantities,
 }: BuildFullscreenDetailRowsParams): FullscreenDetailItem[][] {
   const targetTs = hoverTimestamp !== null ? hoverTimestamp : null;
   const targetData = hoverData;
@@ -130,14 +133,22 @@ export function buildFullscreenDetailRows({
     },
   ];
 
-  return [
-    [
-      row1[0],
-      row1[1],
-      row2[2],
-      row2[0],
-      row1[3],
-      {
+  const columns: {
+    top: FullscreenDetailItem;
+    bottom: FullscreenDetailItem;
+    quantities: (string | null)[];
+  }[] = [
+    {
+      top: row1[0],
+      bottom: { label: '', value: '', testId: 'fullscreen-detail-empty' },
+      quantities: [null, null],
+    },
+    { top: row1[1], bottom: row1[2], quantities: ['temperature', 'apparent_temperature'] },
+    { top: row2[2], bottom: row2[3], quantities: ['precipitation', 'precipitation'] },
+    { top: row2[0], bottom: row2[1], quantities: ['wind_direction', 'precipitation_probability'] },
+    { top: row1[3], bottom: row1[4], quantities: ['wind_speed', 'wind_gusts'] },
+    {
+      top: {
         label: 'CAPE',
         value:
           targetData?.['cape']?.value != null
@@ -145,14 +156,7 @@ export function buildFullscreenDetailRows({
             : placeholder,
         testId: 'fullscreen-detail-cape',
       },
-    ],
-    [
-      { label: '', value: '', testId: 'fullscreen-detail-empty' },
-      row1[2],
-      row2[3],
-      row2[1],
-      row1[4],
-      {
+      bottom: {
         label: 'CIN',
         value:
           targetData?.['convective_inhibition']?.value != null
@@ -160,7 +164,23 @@ export function buildFullscreenDetailRows({
             : placeholder,
         testId: 'fullscreen-detail-cin',
       },
-    ],
+      quantities: ['cape', 'convective_inhibition'],
+    },
+  ];
+
+  // Without a layout every column is shown (time column always).
+  const shown = (quantity: string | null) =>
+    quantity === null || !quantities || quantities.has(quantity);
+  const visible = columns.filter(({ quantities: ids }) =>
+    ids.every((id) => id === null) ? true : ids.some(shown),
+  );
+  const cell = (item: FullscreenDetailItem, quantity: string | null) =>
+    shown(quantity)
+      ? item
+      : { label: '', value: '', testId: `${item.testId}-empty` };
+
+  return [
+    visible.map((column) => cell(column.top, column.quantities[0])),
+    visible.map((column) => cell(column.bottom, column.quantities[1])),
   ];
 }
-

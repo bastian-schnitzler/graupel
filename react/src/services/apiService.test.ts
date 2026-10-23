@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { mergeForecastSegments } from './apiService';
+import { capChainToAvailability } from '../views/meteogramViewUtils';
 import type { WeatherModel, DataPoint } from '../types';
 
 describe('mergeForecastSegments', () => {
-  it('hands over to subsequent model and includes its variables when previous model run ends', () => {
+  it('never hands over inside a slice; the run-end cap moves the boundary instead', () => {
     const chain: WeatherModel[] = [
       { name: 'GeoSphere AROME Austria', max_forecast_horizon_hours: 10 },
       { name: 'ICON-EU', max_forecast_horizon_hours: 20 },
@@ -69,11 +70,28 @@ describe('mergeForecastSegments', () => {
       expect(probPt?.value).toBeNull();
     }
 
-    // Hours 6..10: GeoSphere run ended, handed over to ICON-EU
-    for (let i = 6; i <= 10; i++) {
+    // Hours 6..9: GeoSphere's run ended; without a cap its slice stays empty.
+    for (let i = 6; i < 10; i++) {
       const ts = new Date(baseDate.getTime() + i * 3600 * 1000).toISOString();
       const tempPt = merged.find((p) => p.timestamp === ts && p.variable === 'temperature');
-      const probPt = merged.find((p) => p.timestamp === ts && p.variable === 'precipitation_probability');
+      expect(tempPt?.model).toBe('GeoSphere AROME Austria');
+      expect(tempPt?.value).toBeNull();
+    }
+
+    // Meteogram View caps GeoSphere to the 6 delivered hours: ICON-EU starts at 6h.
+    const capped = capChainToAvailability(chain, {
+      'GeoSphere AROME Austria': {
+        model: 'GeoSphere AROME Austria',
+        chain: 'main',
+        available_hours: 6,
+      },
+    });
+    expect(capped.map((m) => m.max_forecast_horizon_hours)).toEqual([6, 20]);
+    const cappedMerged = mergeForecastSegments(capped, modelForecasts, targetVariables);
+    for (let i = 6; i <= 10; i++) {
+      const ts = new Date(baseDate.getTime() + i * 3600 * 1000).toISOString();
+      const tempPt = cappedMerged.find((p) => p.timestamp === ts && p.variable === 'temperature');
+      const probPt = cappedMerged.find((p) => p.timestamp === ts && p.variable === 'precipitation_probability');
 
       expect(tempPt?.model).toBe('ICON-EU');
       expect(tempPt?.value).toBe(15 + i);
@@ -272,3 +290,93 @@ describe('apiService.getForecast mock fallback', () => {
   });
 });
 
+
+describe('mergeForecastSegments handover direction', () => {
+  it('never fills a later slice with an earlier model beyond its boundary', () => {
+    const start = Date.parse('2026-09-11T00:00:00Z');
+    const ts = (h: number) => new Date(start + h * 3600_000).toISOString();
+    const series = (model: string, hours: number[], offset: number) =>
+      hours.map((h) => ({
+        timestamp: ts(h),
+        variable: 'temperature',
+        value: offset + h,
+        unit: '°C',
+        model,
+      }));
+    // ICON-D2 holds data up to 6h (fetched for dragging) but is shown until 2h.
+    const merged = mergeForecastSegments(
+      [
+        { name: 'ICON-D2', max_forecast_horizon_hours: 2 },
+        { name: 'ICON-EU', max_forecast_horizon_hours: 6 },
+      ],
+      {
+        'ICON-D2': series('ICON-D2', [0, 1, 2, 3, 4, 5], 0),
+        'ICON-EU': series('ICON-EU', [0, 1, 2, 3, 5], 100),
+      },
+      ['temperature'],
+      ts(0),
+      ts(0),
+      ts(6),
+    );
+    const at = (h: number) => merged.find((p) => p.timestamp === ts(h))!;
+    expect(at(1).model).toBe('ICON-D2');
+    expect(at(3).model).toBe('ICON-EU');
+    // ICON-EU misses hour 4: the gap stays empty instead of using ICON-D2.
+    expect(at(4).value).toBeNull();
+    expect(at(4).model).toBe('ICON-EU');
+  });
+});
+
+describe('mergeVerticalCloudSegments run-end cap', () => {
+  it('leaves null run-end hours empty and starts the next model at the capped boundary', async () => {
+    const { mergeVerticalCloudSegments } = await import('./apiService');
+    const start = Date.parse('2026-09-11T00:00:00Z');
+    const ts = (h: number) => new Date(start + h * 3600_000).toISOString();
+    const profiles = (model: string, hours: number[], value: number | null) => ({
+      location: { name: 'T', latitude: 0, longitude: 0 },
+      profiles: hours.map((h) => ({
+        timestamp: ts(h),
+        source_model_id: model,
+        source_model_name: model,
+        levels: [{ pressure_hpa: 850, altitude_m_asl: 1500, cloud_cover_percent: value }],
+      })),
+    });
+    const iconEu = profiles('icon_eu', [0, 1, 2], 40);
+    // Null rows after the run end, as returned by Open-Meteo.
+    iconEu.profiles.push(...profiles('icon_eu', [3, 4], null).profiles);
+    const chain = [
+      { name: 'ICON-EU', id: 'icon_eu', max_forecast_horizon_hours: 5 },
+      { name: 'ECMWF', id: 'ecmwf_ifs025', max_forecast_horizon_hours: 8 },
+    ];
+    const forecasts = {
+      'ICON-EU': iconEu,
+      ECMWF: profiles('ecmwf_ifs025', [0, 1, 2, 3, 4, 5, 6, 7], 60),
+    };
+    const uncapped = mergeVerticalCloudSegments(
+      chain,
+      forecasts,
+      [0, 1, 2, 3, 4, 5, 6, 7].map(ts),
+      ts(0),
+    );
+    // No handover inside ICON-EU's slice: hours 3 and 4 have no profile.
+    expect(
+      uncapped.verticalCloudForecast!.profiles.map((p) => p.timestamp),
+    ).toEqual([0, 1, 2, 5, 6, 7].map(ts));
+
+    const result = mergeVerticalCloudSegments(
+      capChainToAvailability(chain, {
+        'ICON-EU': { model: 'ICON-EU', chain: 'cloud', available_hours: 3 },
+      }),
+      forecasts,
+      [0, 1, 2, 3, 4, 5, 6, 7].map(ts),
+      ts(0),
+    );
+    const sources = result.verticalCloudForecast!.profiles.map((p) => p.source_model_name);
+    expect(sources).toEqual([
+      'ICON-EU', 'ICON-EU', 'ICON-EU', 'ECMWF', 'ECMWF', 'ECMWF', 'ECMWF', 'ECMWF',
+    ]);
+    expect(result.verticalCloudTransitions).toEqual([
+      { timestamp: new Date(start + 3 * 3600_000).toISOString(), from_model: 'icon_eu', to_model: 'ecmwf_ifs025' },
+    ]);
+  });
+});

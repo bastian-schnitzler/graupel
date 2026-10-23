@@ -75,12 +75,15 @@ export function highlightedPaint(
   return ["case", condition, value, base] as ExpressionSpecification;
 }
 
+/** Name given to a point picked on the map; such points show coordinates. */
+export const CUSTOM_LOCATION_NAME = "Custom location";
+
 export function buildCustomLocation(lngLat: {
   lng: number;
   lat: number;
 }): Location {
   return {
-    name: "Custom location",
+    name: CUSTOM_LOCATION_NAME,
     latitude: Number(lngLat.lat.toFixed(4)),
     longitude: Number(lngLat.lng.toFixed(4)),
   };

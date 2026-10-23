@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import pytest
 import uuid
 from graupel.data.models import Location, WeatherModel, MeteogramConfig
@@ -148,7 +149,7 @@ def test_get_forecast_by_location(api):
 
     assert "combined_forecast" in result
     assert "model_forecasts" in result
-    assert len(result["combined_forecast"]) == timeline_hour_count(result) * 12
+    assert len(result["combined_forecast"]) == timeline_hour_count(result) * 14
     assert "ICON-D2" in result["model_forecasts"]
 
     # Verify all 8 variables are represented in combined forecast
@@ -164,6 +165,18 @@ def test_get_forecast_by_location(api):
     assert "cloud_cover_high" not in vars_present
     assert "precipitation" in vars_present
     assert "precipitation_probability" in vars_present
+
+
+def test_get_forecast_reports_generation_time(api):
+    before = datetime.now(timezone.utc).replace(microsecond=0)
+    result = api.get_forecast(
+        location={"name": "Hamburg", "latitude": 53.55, "longitude": 9.99}
+    )
+    after = datetime.now(timezone.utc)
+
+    generated = datetime.fromisoformat(result["generated_at"].replace("Z", "+00:00"))
+    assert result["generated_at"].endswith("Z")
+    assert before <= generated <= after
 
 
 def test_get_forecast_by_config_id(api, storage):

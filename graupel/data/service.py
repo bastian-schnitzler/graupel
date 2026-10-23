@@ -2,6 +2,7 @@ from datetime import datetime, timezone, timedelta, tzinfo
 from typing import List, Dict, Any, Optional, Tuple
 
 from .models import (
+    AutoChainInfo,
     MeteogramConfig,
     Location,
     WeatherModel,
@@ -11,22 +12,30 @@ from .models import (
     VerticalCloudLevel,
     VerticalCloudProfile,
     DetailedCloudForecast,
+    EnsembleRunInfo,
     VerticalCloudTransition,
     SunPeriod,
     VariableTimelineCoverage,
     ModelTimelineDiagnostics,
+    ModelAvailability,
+    RunSegment,
 )
 from .open_meteo import (
-    DEFAULT_VARIABLES,
     VARIABLE_TO_OPENMETEO,
     OpenMeteoClient,
     to_open_meteo_model,
     get_model_catalog,
-    CONVECTIVE_VARIABLES,
-    WEATHER_ICON_VARIABLES,
     resolve_vertical_cloud_source,
+    ensemble_meta_path,
 )
 from .harmonizer import Harmonizer
+from .quantities import (
+    QUANTITIES,
+    fetch_set,
+    main_run_excluded_quantities,
+    optional_quantities,
+    requested_from_model,
+)
 from .storage import Storage
 from .timeline import (
     HOUR,
@@ -38,6 +47,9 @@ from .timeline import (
     parse_timestamp,
     validate_timestamp_sequence,
 )
+
+# Hours requested when probing a run newer than the model metadata names.
+SINGLE_RUN_PROBE_HOURS = 400
 
 DEFAULT_PRESSURE_LEVELS = [
     1000,
@@ -172,6 +184,107 @@ def get_past_hours_for_yesterday(
     return max(24, math.ceil(elapsed) + 2)
 
 
+def find_catalog_model(model_name: str) -> Optional[WeatherModel]:
+    """Return the catalogue entry for a configured model name or id."""
+    target = to_open_meteo_model(model_name)
+    return next(
+        (
+            m
+            for m in get_model_catalog()
+            if (m.id or to_open_meteo_model(m.name)) == target
+        ),
+        None,
+    )
+
+
+def get_fetch_horizon(model: WeatherModel, chain_max_horizon: int) -> int:
+    """Return the hours to request for a chain model.
+
+    Meteogram View may drag a boundary beyond the stored horizon, up to the
+    model's catalogue capability and never past the chain end. Fetching that
+    range keeps a dragged slice filled with the model's own data.
+    """
+    configured = model.max_forecast_horizon_hours
+    catalog_model = find_catalog_model(model.id or model.name)
+    capable = (
+        catalog_model.max_forecast_horizon_hours
+        if catalog_model is not None
+        else configured
+    )
+    return max(configured, min(capable, chain_max_horizon))
+
+
+def compute_available_hours(
+    valid_times: List[datetime], t_now: datetime, fetched_hours: int
+) -> Tuple[Optional[int], Optional[str]]:
+    """Hours from ``t_now`` through the last valid sample (start-stamped).
+
+    Returns ``(None, None)`` when data reaches the end of the fetched window,
+    i.e. the latest run does not limit the requested range, and when the
+    model delivered no data at all: a failed or out-of-domain model keeps its
+    configured slice, which then stays visibly empty.
+    """
+    if not valid_times:
+        return None, None
+    future = [t for t in valid_times if t >= t_now]
+    if not future:
+        return 0, canonical_timestamp(t_now)
+    hours = int((max(future) - t_now).total_seconds() // 3600) + 1
+    if hours >= fetched_hours:
+        return None, None
+    return hours, canonical_timestamp(t_now + timedelta(hours=hours))
+
+
+def cap_chain_to_availability(
+    chain: List[WeatherModel], availability: Dict[str, ModelAvailability]
+) -> List[WeatherModel]:
+    """Move each boundary to the hours the model's latest run delivers.
+
+    The next model starts right at the capped boundary, so no model is shown
+    for hours it has no data for. Boundaries stay non-decreasing.
+    """
+    capped: List[WeatherModel] = []
+    previous = 0
+    for model in chain:
+        horizon = model.max_forecast_horizon_hours
+        info = availability.get(model.name)
+        if info is not None and info.available_hours is not None:
+            horizon = min(horizon, info.available_hours)
+        horizon = max(horizon, previous)
+        capped.append(
+            model.model_copy(update={"max_forecast_horizon_hours": horizon})
+        )
+        previous = horizon
+    return capped
+
+
+def _epoch_to_timestamp(value: Any) -> Optional[str]:
+    if isinstance(value, (int, float)) and value > 0:
+        return canonical_timestamp(datetime.fromtimestamp(value, timezone.utc))
+    return None
+
+
+def has_core_values(points: List[DataPoint]) -> bool:
+    """True when a model delivered any main-run (non-optional) value."""
+    excluded = set(main_run_excluded_quantities())
+    return any(
+        p.value is not None and p.variable not in excluded for p in points
+    )
+
+
+def has_cloud_values(profile: Optional[VerticalCloudProfile]) -> bool:
+    """True when a profile carries at least one cloud cover value.
+
+    Open-Meteo returns null rows for hours after the end of a model run.
+    """
+    return bool(
+        profile
+        and any(
+            level.cloud_cover_percent is not None for level in profile.levels
+        )
+    )
+
+
 class ForecastService:
     def __init__(
         self, client: OpenMeteoClient = None, storage: Storage = None
@@ -199,6 +312,308 @@ class ForecastService:
                 )
         return periods
 
+    async def _api_get(
+        self, params: Dict[str, Any], request_kind: str
+    ) -> Dict[str, Any]:
+        """Perform a live API request and append its response to the archive.
+
+        The archive is write-only: forecasts are never served from it.
+        """
+        raw_response = await self.client._get(params)
+        try:
+            self.storage.archive_api_response(
+                request_kind, params, raw_response
+            )
+        except Exception as e:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                f"Failed to archive {request_kind} API response: {e}"
+            )
+        return raw_response
+
+    async def _fetch_run_info(
+        self, model_ids: List[str]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Fetch latest run times per model id from Open-Meteo metadata."""
+        run_info: Dict[str, Dict[str, Any]] = {}
+        for model_id in dict.fromkeys(model_ids):
+            meta: Dict[str, Any] = {}
+            try:
+                meta = await self.client.fetch_model_metadata(model_id)
+                if meta:
+                    self.storage.archive_api_response(
+                        "model_meta", {"models": model_id}, meta
+                    )
+            except Exception as e:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    f"Failed to fetch run metadata for '{model_id}': {e}"
+                )
+            run_info[model_id] = {
+                "init": _epoch_to_timestamp(
+                    meta.get("last_run_initialisation_time")
+                ),
+                "available": _epoch_to_timestamp(
+                    meta.get("last_run_availability_time")
+                ),
+                # Raw values to detect mixed runs (newest run end, cadence).
+                "init_epoch": meta.get("last_run_initialisation_time"),
+                "data_end_epoch": meta.get("data_end_time"),
+                "interval_seconds": meta.get("update_interval_seconds"),
+                "resolution_seconds": meta.get("temporal_resolution_seconds"),
+            }
+        return run_info
+
+    async def _probe_newer_run(
+        self,
+        model_id: str,
+        info: Dict[str, Any],
+        location: Location,
+        now: datetime,
+        max_probes: int = 4,
+    ) -> Optional[Tuple[datetime, datetime]]:
+        """Newest run after the metadata run that already has data.
+
+        Probes run init times one update interval apart, starting after the
+        metadata run, until a run is missing or lies in the future. Returns
+        ``(run init, exclusive end of its data)`` or None.
+        """
+        init_epoch = info.get("init_epoch")
+        interval_seconds = info.get("interval_seconds")
+        if not isinstance(init_epoch, (int, float)) or not isinstance(
+            interval_seconds, (int, float)
+        ):
+            return None
+        if interval_seconds <= 0:
+            return None
+        interval = timedelta(seconds=int(interval_seconds))
+        run = datetime.fromtimestamp(init_epoch, timezone.utc) + interval
+        newest: Optional[Tuple[datetime, datetime]] = None
+        for _ in range(max_probes):
+            if run > now:
+                break
+            params = {
+                "models": model_id,
+                "run": run.strftime("%Y-%m-%dT%H:%M"),
+            }
+            try:
+                raw = await self.client.fetch_single_run(
+                    model_id,
+                    params["run"],
+                    location.latitude,
+                    location.longitude,
+                    SINGLE_RUN_PROBE_HOURS,
+                )
+            except Exception:
+                # Not published yet (Open-Meteo answers 400).
+                break
+            try:
+                self.storage.archive_api_response("single_run", params, raw)
+            except Exception:
+                pass
+            hourly = raw.get("hourly", {}) if isinstance(raw, dict) else {}
+            values = next(
+                (v for key, v in hourly.items() if key != "time"), []
+            )
+            valid = [
+                parse_timestamp(t)
+                for t, v in zip(hourly.get("time", []), values)
+                if v is not None
+            ]
+            if not valid:
+                break
+            newest = (run, max(valid) + HOUR)
+            run += interval
+        return newest
+
+    async def _fetch_ensemble_info(
+        self, model_id: str
+    ) -> Optional[EnsembleRunInfo]:
+        """Newest run of the ensemble behind the model's probability."""
+        import logging
+
+        path = ensemble_meta_path(model_id)
+        if path is None:
+            return None
+        try:
+            meta = await self.client.fetch_ensemble_metadata(model_id)
+        except Exception as e:
+            logging.getLogger(__name__).warning(
+                f"Failed to fetch ensemble metadata for '{model_id}': {e}"
+            )
+            return None
+        if not meta:
+            return None
+        try:
+            self.storage.archive_api_response(
+                "ensemble_meta", {"models": path}, meta
+            )
+        except Exception as e:
+            logging.getLogger(__name__).warning(
+                f"Failed to archive ensemble metadata for '{model_id}': {e}"
+            )
+        interval = meta.get("update_interval_seconds")
+        return EnsembleRunInfo(
+            model_id=path,
+            run_init_time=_epoch_to_timestamp(
+                meta.get("last_run_initialisation_time")
+            ),
+            run_availability_time=_epoch_to_timestamp(
+                meta.get("last_run_availability_time")
+            ),
+            data_end_time=_epoch_to_timestamp(meta.get("data_end_time")),
+            update_interval_hours=(
+                interval / 3600
+                if isinstance(interval, (int, float))
+                else None
+            ),
+        )
+
+    async def _resolve_run_segments(
+        self,
+        model_id: str,
+        info: Dict[str, Any],
+        data_end: datetime,
+        location: Location,
+        now: Optional[datetime] = None,
+    ) -> List[RunSegment]:
+        """Split a model series into the runs it comes from, newest first.
+
+        Open-Meteo overwrites only the hours a new run computes, so when the
+        newest run is shorter (e.g. ECMWF 06Z 144h after 00Z 360h) later
+        hours come from earlier runs. Each hour belongs to the most recent
+        run that covers it. Returns [] without run metadata.
+
+        ``meta.json`` can lag behind the served data (it still named the
+        ICON-EU 15Z run while the 18Z run was served). Only when the runs it
+        names cannot explain where the data ends are newer runs probed; a
+        newer run found replaces the metadata run in ``info`` (``init``,
+        ``available`` unknown), so the model card names it too.
+        """
+        segments, covered_end = await self._build_run_segments(
+            model_id, info, data_end, location
+        )
+        if covered_end is None or covered_end >= data_end:
+            return segments
+        newer = await self._probe_newer_run(
+            model_id, info, location, now or datetime.now(timezone.utc)
+        )
+        if newer is None:
+            return segments
+        run_init, run_end = newer
+        info.update(
+            {
+                "init": canonical_timestamp(run_init),
+                # Unknown for a run the metadata does not list.
+                "available": None,
+                "init_epoch": int(run_init.timestamp()),
+                "data_end_epoch": int(run_end.timestamp()),
+            }
+        )
+        segments, _ = await self._build_run_segments(
+            model_id, info, data_end, location
+        )
+        return segments
+
+    async def _build_run_segments(
+        self,
+        model_id: str,
+        info: Dict[str, Any],
+        data_end: datetime,
+        location: Location,
+    ) -> Tuple[List[RunSegment], Optional[datetime]]:
+        """Run segments from the newest run in ``info`` backwards.
+
+        Also returns how far those runs reach (None when unknown), so the
+        caller can tell whether they explain the data end.
+        """
+        init_epoch = info.get("init_epoch")
+        newest_end_epoch = info.get("data_end_epoch")
+        if not isinstance(init_epoch, (int, float)):
+            return [], None
+        native_hours = max(
+            1, int(info.get("resolution_seconds") or 3600) // 3600
+        )
+
+        def run_length(run_start: datetime, last_sample: datetime) -> int:
+            # Coarser models are padded to hourly at the end: round down.
+            hours = int((last_sample - run_start).total_seconds() // 3600)
+            return hours - hours % native_hours
+
+        newest_init = datetime.fromtimestamp(init_epoch, timezone.utc)
+        newest = RunSegment(run_init_time=canonical_timestamp(newest_init))
+        if not isinstance(newest_end_epoch, (int, float)):
+            return [newest], None
+        newest_end = datetime.fromtimestamp(newest_end_epoch, timezone.utc)
+        newest.run_length_hours = run_length(newest_init, newest_end - HOUR)
+        if data_end <= newest_end:
+            return [newest], newest_end
+        newest.valid_until = canonical_timestamp(newest_end)
+        segments = [newest]
+        covered_end = newest_end
+        interval = timedelta(seconds=int(info.get("interval_seconds") or 21600))
+        # An older run never reaches further than a newer run of the longest
+        # run length, so the search stops at the first such run.
+        catalog_model = find_catalog_model(model_id)
+        longest_run = (
+            catalog_model.max_forecast_hours if catalog_model else None
+        )
+        for k in range(1, 9):
+            run = newest_init - k * interval
+            hours = int((data_end - run).total_seconds() // 3600) + 1
+            params = {"models": model_id, "run": run.strftime("%Y-%m-%dT%H:%M")}
+            try:
+                raw = await self.client.fetch_single_run(
+                    model_id,
+                    params["run"],
+                    location.latitude,
+                    location.longitude,
+                    hours,
+                )
+                self.storage.archive_api_response("single_run", params, raw)
+            except Exception as e:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    f"Failed to fetch run {params['run']} of '{model_id}': {e}"
+                )
+                continue
+            hourly = raw.get("hourly", {}) if isinstance(raw, dict) else {}
+            values = next(
+                (v for key, v in hourly.items() if key != "time"), []
+            )
+            valid = [
+                parse_timestamp(t)
+                for t, v in zip(hourly.get("time", []), values)
+                if v is not None
+            ]
+            if not valid:
+                continue
+            run_end = max(valid) + HOUR
+            if run_end <= covered_end:
+                continue
+            segment_end = min(run_end, data_end)
+            segments.append(
+                RunSegment(
+                    run_init_time=canonical_timestamp(run),
+                    run_length_hours=run_length(run, max(valid)),
+                    valid_from=canonical_timestamp(covered_end),
+                    valid_until=(
+                        None
+                        if segment_end >= data_end
+                        else canonical_timestamp(segment_end)
+                    ),
+                )
+            )
+            covered_end = segment_end
+            if covered_end >= data_end:
+                break
+            if longest_run and run_length(run, max(valid)) >= longest_run:
+                break
+        return segments, covered_end
+
     async def fetch_sun_phases(
         self,
         location: Location,
@@ -217,7 +632,7 @@ class ForecastService:
             "forecast_days": min(16, max(1, forecast_days)),
             "models": "best_match",
         }
-        raw = await self.client._get(params)
+        raw = await self._api_get(params, "sun_phases")
         return self._extract_sun_periods(raw)
 
     async def _fetch_raw_model_datasets(
@@ -229,15 +644,11 @@ class ForecastService:
         past_hours: Optional[int] = None,
     ) -> List[RawForecastData]:
         """Fetch raw data for specified variables for a specific model."""
-        catalog_model = next(
-            (m for m in get_model_catalog()
-             if (m.id or to_open_meteo_model(m.name)) == to_open_meteo_model(model_name)),
-            None,
-        )
+        catalog_model = find_catalog_model(model_name)
+        supported = catalog_model.supported_variables if catalog_model else None
         openmeteo_vars = [
             VARIABLE_TO_OPENMETEO.get(v, v) for v in variables
-            if Harmonizer.normalize_variable(v) not in CONVECTIVE_VARIABLES
-            or (catalog_model and Harmonizer.normalize_variable(v) in catalog_model.supported_variables)
+            if requested_from_model(Harmonizer.normalize_variable(v), supported)
         ]
         if past_hours is None:
             user_tz = get_user_timezone()
@@ -254,7 +665,19 @@ class ForecastService:
             "timezone": "GMT",
         }
 
-        raw_response = await self.client._get(params)
+        try:
+            raw_response = await self._api_get(params, "forecast")
+        except Exception:
+            # Some model endpoints reject optional snow fields. Keep the rest of
+            # that model's forecast available in this case.
+            rejectable = {
+                q.api_name for q in QUANTITIES.values() if q.retry_without
+            }
+            if not rejectable.intersection(openmeteo_vars):
+                raise
+            fallback_vars = [v for v in openmeteo_vars if v not in rejectable]
+            params["hourly"] = ",".join(fallback_vars)
+            raw_response = await self._api_get(params, "forecast")
 
         hourly = raw_response.get("hourly", {})
         hourly_units = raw_response.get("hourly_units", {})
@@ -320,11 +743,17 @@ class ForecastService:
         variables: Optional[List[str]] = None,
         variable: Optional[str] = None,
         reference_time: Optional[datetime] = None,
+        auto_chain: Optional[AutoChainInfo] = None,
     ) -> HarmonizedForecastResponse:
         """
         Fetches all models individually for requested variables, harmonizes raw data into standardized DataPoints,
         and returns both individual model series and a combined forecast series where transitions
         happen based on max_forecast_horizon_hours in the configuration.
+
+        With `auto_chain` (normal mode, system.md §3.3) models without any data
+        for the location are dropped from both chains, so the next model
+        takes over their slice; the response's `auto_chain` lists the chains
+        actually used and the dropped models.
         """
         if not config.model_chain:
             raise ValueError("Configuration contains no forecast models.")
@@ -334,7 +763,13 @@ class ForecastService:
         elif variable is not None:
             target_variables = [variable]
         else:
-            target_variables = DEFAULT_VARIABLES + CONVECTIVE_VARIABLES + WEATHER_ICON_VARIABLES
+            # All registered surface quantities, in both modes and for every
+            # layout (system.md §9.3); the cloud profile is fetched separately for
+            # the cloud chain.
+            target_variables = [
+                v for v in fetch_set()
+                if QUANTITIES[v].source == "hourly"
+            ]
 
         raw_datasets: List[RawForecastData] = []
         model_forecasts: Dict[str, List[DataPoint]] = {}
@@ -367,6 +802,14 @@ class ForecastService:
         past_hours = get_past_hours_for_yesterday(
             config.location, now_utc, target_tz=user_tz
         )
+        max_chain_horizon = max(
+            (m.max_forecast_horizon_hours for m in config.model_chain),
+            default=0,
+        )
+        fetch_horizons = {
+            m.name: get_fetch_horizon(m, max_chain_horizon)
+            for m in config.model_chain
+        }
 
         # Fetch and harmonize each model
         for weather_model in config.model_chain:
@@ -374,7 +817,7 @@ class ForecastService:
                 model_raw_list = await self._fetch_raw_model_datasets(
                     config,
                     weather_model.name,
-                    weather_model.max_forecast_horizon_hours,
+                    fetch_horizons[weather_model.name],
                     variables=target_variables,
                     past_hours=past_hours,
                 )
@@ -398,6 +841,35 @@ class ForecastService:
         if len(fetch_errors) == len(config.model_chain) and not raw_datasets:
             first_err = next(iter(fetch_errors.values()))
             raise first_err
+
+        dropped_models: List[str] = []
+        dropped_cloud_models: List[str] = []
+        if auto_chain is not None:
+            dropped_models = [
+                m.name
+                for m in config.model_chain
+                if not has_core_values(model_forecasts.get(m.name, []))
+            ]
+            if len(dropped_models) == len(config.model_chain):
+                # Nothing delivers data: keep the chain, its slices stay empty.
+                dropped_models = []
+            if dropped_models:
+                kept = [
+                    m for m in config.model_chain
+                    if m.name not in dropped_models
+                ]
+                for name in dropped_models:
+                    model_forecasts.pop(name, None)
+                raw_datasets = [
+                    d for d in raw_datasets
+                    if d.model_name not in dropped_models
+                ]
+                config = config.model_copy(
+                    update={"model_chain": kept, "main_model_chain": kept}
+                )
+                max_chain_horizon = max(
+                    m.max_forecast_horizon_hours for m in kept
+                )
 
         if not raw_datasets:
             return HarmonizedForecastResponse(
@@ -431,23 +903,11 @@ class ForecastService:
         timeline_start_dt = yesterday_midnight_utc
         t_now = now_utc.replace(minute=0, second=0, microsecond=0)
         t_now_iso = canonical_timestamp(t_now)
-        max_chain_horizon = max(
-            (m.max_forecast_horizon_hours for m in config.model_chain),
-            default=0,
-        )
         timeline_end_iso = model_end_timestamp(t_now, max_chain_horizon)
         all_timestamps = build_hourly_timeline(
             canonical_timestamp(timeline_start_dt), timeline_end_iso
         )
 
-        failed_models = [
-            m
-            for m in config.model_chain
-            if m.name in fetch_errors
-            or not any(
-                p.value is not None for p in model_forecasts.get(m.name, [])
-            )
-        ]
         # Determine normalized target variable names to look for
         normalized_vars = list(
             dict.fromkeys(
@@ -456,27 +916,21 @@ class ForecastService:
         )
 
         # Track default or discovered units per normalized variable
-        DEFAULT_UNITS = {
-            "temperature": "°C",
-            "apparent_temperature": "°C",
-            "wind_speed": "km/h",
-            "wind_gusts": "km/h",
-            "wind_direction": "°",
-            "cloud_cover": "%",
-            "precipitation": "mm",
-            "precipitation_probability": "%",
-            "cape": "J/kg",
-            "convective_inhibition": "J/kg",
-            "lightning_potential": "J/kg",
-        }
+        DEFAULT_UNITS = Harmonizer.TARGET_UNITS
         var_units: Dict[str, str] = {}
         for d in raw_datasets:
             norm_v = Harmonizer.normalize_variable(d.variable)
             if d.unit and norm_v not in var_units:
-                var_units[norm_v] = "J/kg" if norm_v in CONVECTIVE_VARIABLES else d.unit
+                quantity = QUANTITIES.get(norm_v)
+                var_units[norm_v] = (
+                    quantity.unit
+                    if quantity and not quantity.unit_from_api
+                    else d.unit
+                )
 
-        # Clip each model to its configured absolute half-open interval and
-        # record actual variable availability separately from that model range.
+        # Clip each model to its fetched absolute half-open interval (which
+        # covers boundaries dragged in Meteogram View) and record actual
+        # variable availability for the configured model range separately.
         timeline_diagnostics: Dict[str, ModelTimelineDiagnostics] = {}
         for weather_model in config.model_chain:
             expected_end = parse_timestamp(
@@ -484,20 +938,30 @@ class ForecastService:
                     t_now, weather_model.max_forecast_horizon_hours
                 )
             )
-            model_points = [
+            fetched_end = parse_timestamp(
+                model_end_timestamp(
+                    t_now, fetch_horizons[weather_model.name]
+                )
+            )
+            fetched_points = [
                 point
                 for point in model_forecasts.get(weather_model.name, [])
                 if timeline_start_dt
                 <= parse_timestamp(point.timestamp)
-                < expected_end
+                < fetched_end
             ]
-            model_points.sort(
+            fetched_points.sort(
                 key=lambda point: (
                     parse_timestamp(point.timestamp),
                     point.variable,
                 )
             )
-            model_forecasts[weather_model.name] = model_points
+            model_forecasts[weather_model.name] = fetched_points
+            model_points = [
+                point
+                for point in fetched_points
+                if parse_timestamp(point.timestamp) < expected_end
+            ]
 
             variable_diagnostics: Dict[str, VariableTimelineCoverage] = {}
             expected_last = (
@@ -574,7 +1038,7 @@ class ForecastService:
                 )
                 variable_diagnostics[norm_var] = coverage
 
-                if not coverage.complete and norm_var not in WEATHER_ICON_VARIABLES and not (norm_var in CONVECTIVE_VARIABLES and not variable_points):
+                if not coverage.complete and norm_var not in optional_quantities():
                     import logging
 
                     logging.getLogger(__name__).warning(
@@ -596,6 +1060,65 @@ class ForecastService:
                     variables=variable_diagnostics,
                 )
             )
+
+        # Hours each model's latest run really delivers (core variables only).
+        cloud_chain = config.cloud_model_chain
+        if cloud_chain is None:
+            from .open_meteo import get_default_cloud_model
+
+            cloud_chain = [get_default_cloud_model()]
+        run_info = await self._fetch_run_info(
+            [
+                m.id or to_open_meteo_model(m.name)
+                for m in list(config.model_chain) + list(cloud_chain)
+            ]
+        )
+
+        def availability_for(
+            model: WeatherModel,
+            chain_name: str,
+            valid_times: List[datetime],
+            fetched_hours: int,
+        ) -> ModelAvailability:
+            model_id = model.id or to_open_meteo_model(model.name)
+            hours, valid_until = compute_available_hours(
+                valid_times, t_now, fetched_hours
+            )
+            info = run_info.get(model_id, {})
+            return ModelAvailability(
+                model=model.name,
+                model_id=model_id,
+                chain=chain_name,
+                available_hours=hours,
+                valid_until=valid_until,
+                last_run_init_time=info.get("init"),
+                last_run_availability_time=info.get("available"),
+            )
+
+        # Only main-run quantities define the delivered hours: optional ones
+        # may be missing, and ensemble ones (precipitation probability) end
+        # where the ensemble run ends, often hours after the main run.
+        optional_variables = set(main_run_excluded_quantities())
+        model_availability: Dict[str, ModelAvailability] = {}
+        models_with_data: set[Tuple[str, str]] = set()
+        for weather_model in config.model_chain:
+            core_times = [
+                parse_timestamp(point.timestamp)
+                for point in model_forecasts.get(weather_model.name, [])
+                if point.value is not None
+                and point.variable not in optional_variables
+            ]
+            if core_times:
+                models_with_data.add(("main", weather_model.name))
+            model_availability[weather_model.name] = availability_for(
+                weather_model,
+                "main",
+                core_times,
+                fetch_horizons[weather_model.name],
+            )
+        capped_chain = cap_chain_to_availability(
+            config.model_chain, model_availability
+        )
 
         # Populate empty models in model_forecasts so every model in chain is represented
         for weather_model in config.model_chain:
@@ -624,36 +1147,27 @@ class ForecastService:
                             )
                 model_forecasts[weather_model.name] = empty_pts
 
-        # Determine active models in chain (span > 0)
+        # Determine active models in the capped chain (span > 0)
         active_chain: List[WeatherModel] = []
-        for idx, m in enumerate(config.model_chain):
+        for idx, m in enumerate(capped_chain):
             prev_h = (
-                config.model_chain[idx - 1].max_forecast_horizon_hours
+                capped_chain[idx - 1].max_forecast_horizon_hours
                 if idx > 0
                 else 0
             )
             if m.max_forecast_horizon_hours > prev_h:
                 active_chain.append(m)
 
-        effective_chain = active_chain if active_chain else config.model_chain
+        effective_chain = active_chain if active_chain else capped_chain
 
         forecast_lookup: Dict[str, Dict[tuple[str, str], DataPoint]] = {}
-        valid_times_by_model: Dict[str, set[str]] = {}
-        valid_variables_by_model: Dict[str, set[str]] = {}
         for weather_model in effective_chain:
-            points = model_forecasts.get(weather_model.name, [])
             point_lookup: Dict[tuple[str, str], DataPoint] = {}
-            valid_times: set[str] = set()
-            valid_variables: set[str] = set()
-            for point in points:
-                canonical_time = canonical_timestamp(point.timestamp)
-                point_lookup[(canonical_time, point.variable)] = point
-                if point.value is not None:
-                    valid_times.add(canonical_time)
-                    valid_variables.add(point.variable)
+            for point in model_forecasts.get(weather_model.name, []):
+                point_lookup[
+                    (canonical_timestamp(point.timestamp), point.variable)
+                ] = point
             forecast_lookup[weather_model.name] = point_lookup
-            valid_times_by_model[weather_model.name] = valid_times
-            valid_variables_by_model[weather_model.name] = valid_variables
 
         combined_forecast: List[DataPoint] = []
 
@@ -679,36 +1193,9 @@ class ForecastService:
                 if primary_model is None and effective_chain:
                     primary_model = effective_chain[-1]
 
-            primary_has_data_at_ts = bool(
-                primary_model
-                and ts in valid_times_by_model.get(primary_model.name, set())
-            )
-
-            # If the selected primary model has ended its forecast run or has no valid data at this timestamp
-            # (and is not an outright failed model whose slice must remain empty), advance to the next
-            # available model in effective_chain that has valid data at this timestamp.
-            if (
-                current_time >= t_now
-                and primary_model
-                and not primary_has_data_at_ts
-                and primary_model not in failed_models
-            ):
-                primary_idx = (
-                    effective_chain.index(primary_model)
-                    if primary_model in effective_chain
-                    else -1
-                )
-                candidates = (
-                    effective_chain[primary_idx + 1 :]
-                    + effective_chain[:primary_idx]
-                )
-                for candidate in candidates:
-                    if candidate in failed_models:
-                        continue
-                    if ts in valid_times_by_model.get(candidate.name, set()):
-                        primary_model = candidate
-                        break
-
+            # Each model only ever shows its own data inside its (capped)
+            # slice; missing hours stay empty instead of borrowing another
+            # model's values.
             for norm_var in normalized_vars:
                 selected_point = None
 
@@ -718,26 +1205,6 @@ class ForecastService:
                     )
                     if pt is not None and pt.value is not None:
                         selected_point = pt
-
-                # Fallback check:
-                # If primary model has valid data overall for this variable, but is missing a point
-                # (e.g. boundary handover between adjacent models), allow fallback.
-                # However, if the primary model has NO valid data for this variable (or was empty/failed),
-                # do NOT fallback — leave this model's specified range empty!
-                if selected_point is None and primary_model and current_time >= t_now and norm_var not in CONVECTIVE_VARIABLES + WEATHER_ICON_VARIABLES:
-                    primary_has_var_data = norm_var in valid_variables_by_model.get(
-                        primary_model.name, set()
-                    )
-                    if primary_has_var_data:
-                        for weather_model in effective_chain:
-                            if weather_model.name == primary_model.name:
-                                continue
-                            pt = forecast_lookup.get(weather_model.name, {}).get(
-                                (ts, norm_var)
-                            )
-                            if pt is not None and pt.value is not None:
-                                selected_point = pt
-                                break
 
                 # If still no point, emit an empty DataPoint with value=None for the primary model
                 if selected_point is None and primary_model:
@@ -760,39 +1227,87 @@ class ForecastService:
         vertical_cloud_transitions: List[VerticalCloudTransition] = []
         vertical_cloud_model_forecasts: Dict[str, DetailedCloudForecast] = {}
 
-        cloud_chain = config.cloud_model_chain
-        if cloud_chain is None:
-            from .open_meteo import get_default_cloud_model
-
-            cloud_chain = [get_default_cloud_model()]
+        cloud_model_availability: Dict[str, ModelAvailability] = {}
 
         if cloud_chain and len(cloud_chain) > 0 and all_timestamps:
             try:
-                # 1. Fetch each model in cloud_chain
+                # 1. Fetch each model in cloud_chain. A failing model only
+                # loses its own profiles, never the whole cloud panel.
+                max_cloud_horizon = max(
+                    (m.max_forecast_horizon_hours for m in cloud_chain),
+                    default=0,
+                )
                 for c_model in cloud_chain:
                     cid = c_model.id or to_open_meteo_model(c_model.name)
-                    c_forecast = (
-                        await self.fetch_vertical_cloud_model_forecast(
-                            config.location, c_model
-                        )
+                    cloud_fetch_hours = get_fetch_horizon(
+                        c_model, max_cloud_horizon
                     )
+                    try:
+                        c_forecast = (
+                            await self.fetch_vertical_cloud_model_forecast(
+                                config.location,
+                                c_model,
+                                horizon_hours=cloud_fetch_hours,
+                            )
+                        )
+                    except Exception as e:
+                        import logging
+
+                        logging.getLogger(__name__).warning(
+                            f"Failed to fetch vertical clouds for model "
+                            f"'{c_model.name}': {e}"
+                        )
+                        c_forecast = DetailedCloudForecast(
+                            location=config.location, profiles=[]
+                        )
                     vertical_cloud_model_forecasts[c_model.name] = c_forecast
                     if cid:
                         vertical_cloud_model_forecasts[cid] = c_forecast
+                    cloud_times = [
+                        parse_timestamp(profile.timestamp)
+                        for profile in c_forecast.profiles
+                        if has_cloud_values(profile)
+                    ]
+                    if cloud_times:
+                        models_with_data.add(("cloud", c_model.name))
+                    cloud_model_availability[c_model.name] = availability_for(
+                        c_model, "cloud", cloud_times, cloud_fetch_hours
+                    )
 
-                # 2. Filter active models (non-zero span)
+                if auto_chain is not None:
+                    with_data = [
+                        m for m in cloud_chain
+                        if ("cloud", m.name) in models_with_data
+                    ]
+                    if with_data and len(with_data) < len(cloud_chain):
+                        for m in cloud_chain:
+                            if m in with_data:
+                                continue
+                            dropped_cloud_models.append(m.name)
+                            cloud_model_availability.pop(m.name, None)
+                            vertical_cloud_model_forecasts.pop(m.name, None)
+                            if m.id:
+                                vertical_cloud_model_forecasts.pop(m.id, None)
+                        cloud_chain = with_data
+
+                # 2. Cap to run availability, then filter active models
+                capped_cloud_chain = cap_chain_to_availability(
+                    cloud_chain, cloud_model_availability
+                )
                 active_cloud_chain = [
                     m
-                    for idx, m in enumerate(cloud_chain)
+                    for idx, m in enumerate(capped_cloud_chain)
                     if m.max_forecast_horizon_hours
                     > (
-                        cloud_chain[idx - 1].max_forecast_horizon_hours
+                        capped_cloud_chain[idx - 1].max_forecast_horizon_hours
                         if idx > 0
                         else 0
                     )
                 ]
                 effective_cloud_chain = (
-                    active_cloud_chain if active_cloud_chain else cloud_chain
+                    active_cloud_chain
+                    if active_cloud_chain
+                    else capped_cloud_chain
                 )
 
                 composite_profiles: List[VerticalCloudProfile] = []
@@ -804,6 +1319,15 @@ class ForecastService:
                         canonical_timestamp(profile.timestamp): profile
                         for profile in forecast.profiles
                     }
+
+                def valid_cloud_profile(
+                    c_m: WeatherModel, ts: str
+                ) -> Optional[VerticalCloudProfile]:
+                    c_id = c_m.id or to_open_meteo_model(c_m.name)
+                    prof = cloud_profile_lookup.get(c_m.name, {}).get(
+                        ts
+                    ) or cloud_profile_lookup.get(c_id, {}).get(ts)
+                    return prof if has_cloud_values(prof) else None
 
                 for ts in all_timestamps:
                     current_dt = parse_timestamp(ts)
@@ -822,13 +1346,14 @@ class ForecastService:
                                 primary_c_model = c_m
                                 break
 
+                    matching_prof = (
+                        valid_cloud_profile(primary_c_model, ts)
+                        if primary_c_model is not None
+                        else None
+                    )
                     if primary_c_model is not None:
                         cid = primary_c_model.id or to_open_meteo_model(
                             primary_c_model.name
-                        )
-                        matching_prof = (
-                            cloud_profile_lookup.get(primary_c_model.name, {}).get(ts)
-                            or cloud_profile_lookup.get(cid, {}).get(ts)
                         )
                         if matching_prof:
                             composite_profiles.append(
@@ -867,7 +1392,91 @@ class ForecastService:
                     f"Failed to resolve vertical cloud profile: {e}"
                 )
 
-        return HarmonizedForecastResponse(
+        # Mixed runs: which runs each model's series is composed of.
+        run_segments_cache: Dict[Tuple[str, str], List[RunSegment]] = {}
+        for chain_name, availabilities, models in (
+            ("main", model_availability, config.model_chain),
+            ("cloud", cloud_model_availability, cloud_chain or []),
+        ):
+            max_horizon = max(
+                (m.max_forecast_horizon_hours for m in models), default=0
+            )
+            for model in models:
+                info_entry = availabilities.get(model.name)
+                if info_entry is None or not info_entry.model_id:
+                    continue
+                if info_entry.available_hours is not None:
+                    if info_entry.available_hours == 0:
+                        continue
+                    data_end = parse_timestamp(info_entry.valid_until)
+                elif (chain_name, model.name) in models_with_data:
+                    data_end = t_now + timedelta(
+                        hours=get_fetch_horizon(model, max_horizon)
+                    )
+                else:
+                    continue
+                key = (info_entry.model_id, canonical_timestamp(data_end))
+                if key not in run_segments_cache:
+                    run_segments_cache[key] = await self._resolve_run_segments(
+                        info_entry.model_id,
+                        run_info.setdefault(info_entry.model_id, {}),
+                        data_end,
+                        config.location,
+                        datetime.now(timezone.utc),
+                    )
+                segments = run_segments_cache[key]
+                # A newer run than meta.json names may have been found.
+                corrected = run_info.get(info_entry.model_id, {})
+                info_entry.last_run_init_time = corrected.get("init")
+                info_entry.last_run_availability_time = corrected.get(
+                    "available"
+                )
+                info_entry.run_segments = [
+                    seg.model_copy() for seg in segments
+                ]
+                if len(segments) > 1:
+                    info_entry.data_end_run_init_time = segments[-1].run_init_time
+
+        # Precipitation probability comes from the model's ensemble, which
+        # Open-Meteo publishes separately (often later than the main run).
+        ensemble_cache: Dict[str, Optional[EnsembleRunInfo]] = {}
+        for weather_model in config.model_chain:
+            info_entry = model_availability.get(weather_model.name)
+            if info_entry is None or not info_entry.model_id:
+                continue
+            probability_times = [
+                parse_timestamp(point.timestamp)
+                for point in model_forecasts.get(weather_model.name, [])
+                if point.value is not None
+                and point.variable == "precipitation_probability"
+            ]
+            if probability_times:
+                info_entry.probability_valid_until = canonical_timestamp(
+                    max(probability_times) + HOUR
+                )
+            if info_entry.model_id not in ensemble_cache:
+                ensemble_cache[info_entry.model_id] = (
+                    await self._fetch_ensemble_info(info_entry.model_id)
+                )
+            ensemble = ensemble_cache[info_entry.model_id]
+            if ensemble is not None:
+                info_entry.ensemble = ensemble.model_copy()
+
+        try:
+            self.storage.record_model_availability(
+                list(model_availability.values())
+                + list(cloud_model_availability.values()),
+                config.location,
+                t_now_iso,
+            )
+        except Exception as e:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                f"Failed to store model run availability: {e}"
+            )
+
+        response = HarmonizedForecastResponse(
             combined_forecast=combined_forecast,
             model_forecasts=model_forecasts,
             raw_data=raw_datasets,
@@ -880,38 +1489,44 @@ class ForecastService:
             timeline_end=timeline_end_iso,
             user_timezone=user_tz_name,
             timeline_diagnostics=timeline_diagnostics,
+            model_availability=model_availability,
+            cloud_model_availability=cloud_model_availability,
         )
+        if auto_chain is not None:
+            response.auto_chain = auto_chain.model_copy(
+                update={
+                    "main_model_chain": list(config.model_chain),
+                    "cloud_model_chain": list(cloud_chain or []),
+                    "dropped_models": dropped_models,
+                    "dropped_cloud_models": dropped_cloud_models,
+                }
+            )
+            config = config.model_copy(
+                update={"cloud_model_chain": list(cloud_chain or [])}
+            )
+        # Structured archive (system.md §9.3); stores nothing while disabled.
+        try:
+            self.storage.record_forecast_fetch(response, config)
+        except Exception as e:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                f"Failed to archive forecast: {e}"
+            )
+        return response
 
     async def fetch_vertical_cloud_model_forecast(
-        self, location: Location, model: WeatherModel
+        self,
+        location: Location,
+        model: WeatherModel,
+        horizon_hours: Optional[int] = None,
     ) -> DetailedCloudForecast:
         """
-        Fetches or retrieves cached vertical cloud pressure-level forecast for a single model across its full horizon.
+        Fetches the vertical cloud pressure-level forecast for a single model across its full horizon.
         """
         model_id = model.id or to_open_meteo_model(model.name)
-        cached = self.storage.read_vertical_cloud_forecast(location, model_id)
-        if cached:
-            cached.profiles = sorted(
-                [
-                    profile.model_copy(
-                        update={
-                            "timestamp": canonical_timestamp(
-                                profile.timestamp
-                            )
-                        }
-                    )
-                    for profile in cached.profiles
-                ],
-                key=lambda profile: parse_timestamp(profile.timestamp),
-            )
-            validate_timestamp_sequence(
-                [profile.timestamp for profile in cached.profiles],
-                dataset_name=f"{model.name} cached vertical cloud timeline",
-            )
-            return cached
-
         levels_to_fetch = model.pressure_levels_hpa or DEFAULT_PRESSURE_LEVELS
-        horizon = (
+        horizon = horizon_hours or (
             model.max_forecast_horizon_hours or model.max_forecast_hours or 72
         )
 
@@ -933,7 +1548,7 @@ class ForecastService:
         }
 
         try:
-            raw_response = await self.client._get(params)
+            raw_response = await self._api_get(params, "vertical_cloud")
         except Exception:
             # Fallback mock empty if fetch fails
             raw_response = {}
@@ -991,15 +1606,7 @@ class ForecastService:
                 )
             )
 
-        forecast_result = DetailedCloudForecast(
-            location=location, profiles=profiles
-        )
-        if profiles:
-            self.storage.save_vertical_cloud_forecast(
-                location, model_id, forecast_result
-            )
-
-        return forecast_result
+        return DetailedCloudForecast(location=location, profiles=profiles)
 
     async def get_vertical_cloud_forecast(
         self,

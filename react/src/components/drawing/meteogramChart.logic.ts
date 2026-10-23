@@ -8,10 +8,7 @@ import {
   getZonedDateParts,
   normalizeTimestamp,
 } from "../../utils/timeline";
-import {
-  buildIconSlots,
-  aggregateThunderstorms,
-} from "../../utils/thunderstormIcons";
+import { buildIconSlots } from "../../utils/thunderstormIcons";
 import { WIND_ICON_FOOTPRINT_PX } from "./meteogramLayout";
 import type { DayGroupRenderItem } from "./TimelineOverlay";
 
@@ -42,15 +39,16 @@ export function buildDataPointTimeMap(
 export function extractWindDirectionSamples(
   timestamps: number[],
   timeMap: Map<number, Record<string, DataPoint>>,
+  quantity = "wind_direction",
 ): Array<{ timeMs: number; direction: number; model: string }> {
   return timestamps.flatMap((timestamp) => {
-    const direction = timeMap.get(timestamp)?.["wind_direction"]?.value;
+    const direction = timeMap.get(timestamp)?.[quantity]?.value;
     return typeof direction === "number" && Number.isFinite(direction)
       ? [
           {
             timeMs: timestamp,
             direction,
-            model: timeMap.get(timestamp)?.["wind_direction"]?.model || "",
+            model: timeMap.get(timestamp)?.[quantity]?.model || "",
           },
         ]
       : [];
@@ -81,6 +79,8 @@ export interface CalculateIconSlotsParams {
   embeddedWidth?: number;
   fullscreenWidth?: number;
   svgWidth: number;
+  /** Icon footprint in screen pixels (default: wind icon footprint). */
+  footprintPx?: number;
 }
 
 /**
@@ -102,24 +102,11 @@ export function calculateIconSlotsByMode(params: CalculateIconSlotsParams) {
       ((params.timeline.rightX - params.timeline.leftX) * width) /
         params.svgWidth /
         (params.timeline.endMs - params.timeline.startMs),
-      WIND_ICON_FOOTPRINT_PX,
+      params.footprintPx ?? WIND_ICON_FOOTPRINT_PX,
     );
   return {
     embedded: calculateSlots(params.embeddedWidth || params.svgWidth),
     fullscreen: calculateSlots(params.fullscreenWidth || params.svgWidth),
-  };
-}
-
-/**
- * Aggregates thunderstorm icons per mode based on slot layouts and forecast data.
- */
-export function calculateThunderstormIconsByMode(
-  iconSlotsByMode: { embedded: any[]; fullscreen: any[] },
-  data: DataPoint[],
-) {
-  return {
-    embedded: aggregateThunderstorms(iconSlotsByMode.embedded, data),
-    fullscreen: aggregateThunderstorms(iconSlotsByMode.fullscreen, data),
   };
 }
 

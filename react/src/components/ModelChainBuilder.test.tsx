@@ -277,6 +277,47 @@ describe("ModelChainBuilder", () => {
     expect(screen.getByText("DYNAMIC-MODEL-2")).toBeTruthy();
   });
 
+  for (const [label, prefix] of [["main", ""], ["cloud", "cloud-"]] as const) {
+    it(`inserts an added model by horizon in the ${label} chain (#38)`, () => {
+      const catalogue = {
+        icon_ch2: { id: "icon_ch2", name: "ICON-CH2", max_forecast_horizon_hours: 120 },
+        icon_ch1: { id: "icon_ch1", name: "ICON-CH1", max_forecast_horizon_hours: 33 },
+        icon_ch2b: { id: "icon_ch2b", name: "ICON-CH2 copy", max_forecast_horizon_hours: 120 },
+      };
+      const onChange = vi.fn();
+      const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+      render(
+        <ModelChainBuilder
+          modelChain={[{ id: "icon_ch2", name: "ICON-CH2", max_forecast_horizon_hours: 50 }]}
+          onChange={onChange}
+          availableModels={catalogue as any}
+          testIdPrefix={prefix}
+          isCloudChain={prefix === "cloud-"}
+        />,
+      );
+      fireEvent.click(screen.getByTestId(`${prefix}add-model-btn`));
+      fireEvent.click(screen.getByText("ICON-CH1"));
+      expect(alertSpy).not.toHaveBeenCalled();
+      expect(onChange).toHaveBeenCalledWith(
+        [
+          { id: "icon_ch1", name: "ICON-CH1", max_forecast_horizon_hours: 33 },
+          { id: "icon_ch2", name: "ICON-CH2", max_forecast_horizon_hours: 50 },
+        ],
+        true,
+      );
+
+      // Equal capability: the only error, nothing changes.
+      onChange.mockClear();
+      fireEvent.click(screen.getByTestId(`${prefix}add-model-btn`));
+      fireEvent.click(screen.getByText("ICON-CH2 copy"));
+      expect(alertSpy).toHaveBeenCalledWith(
+        "ICON-CH2 copy and ICON-CH2 have the same horizon (120h).",
+      );
+      expect(onChange).not.toHaveBeenCalled();
+      alertSpy.mockRestore();
+    });
+  }
+
   it("displays warning badge for partially supported models", () => {
     const dynamicModels = {
       "PARTIAL-MODEL": {

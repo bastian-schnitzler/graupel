@@ -193,3 +193,69 @@ export function getPreviousLocalMidnight(now: number, timeZone = 'UTC'): number 
   }
   return candidate;
 }
+
+/** Day-range buttons (system.md §16.1, #162); null = "All". */
+export const DAY_RANGE_CHOICES = [4, 7, 10, 14, null] as const;
+export type DayRangeChoice = (typeof DAY_RANGE_CHOICES)[number];
+
+/** The instant `days` local calendar days after `start` (same wall time). */
+export function addLocalDays(start: number, days: number, timeZone = 'UTC'): number {
+  const tz = timeZone === 'auto' ? 'UTC' : timeZone;
+  const local = zonedParts(start, tz);
+  const desired = Date.UTC(
+    Number(local.year),
+    Number(local.month) - 1,
+    Number(local.day) + days,
+    Number(local.hour),
+    Number(local.minute),
+    Number(local.second),
+  );
+  let candidate = desired;
+  for (let iteration = 0; iteration < 3; iteration += 1) {
+    const actual = zonedParts(candidate, tz);
+    const representedAsUtc = Date.UTC(
+      Number(actual.year),
+      Number(actual.month) - 1,
+      Number(actual.day),
+      Number(actual.hour),
+      Number(actual.minute),
+      Number(actual.second),
+    );
+    candidate += desired - representedAsUtc;
+  }
+  return candidate;
+}
+
+/**
+ * Visible range of a day-range button: from the timeline start N local days
+ * on, clamped to the available range; "All" (null) = the whole range.
+ */
+export function calculateDayRange(
+  maximumRange: TimeRange,
+  days: DayRangeChoice,
+  timeZone = 'UTC',
+): TimeRange {
+  if (days === null) return { ...maximumRange };
+  const end = addLocalDays(maximumRange.start, days, timeZone);
+  return { start: maximumRange.start, end: Math.min(end, maximumRange.end) };
+}
+
+/**
+ * Highlighted button: the one whose range equals the visible range. When
+ * clamping makes several equal (few days available), the chosen one wins,
+ * else "All"; undefined when none matches (e.g. after wheel zoom).
+ */
+export function findActiveDayRange(
+  visibleRange: TimeRange,
+  maximumRange: TimeRange,
+  chosen: DayRangeChoice | undefined,
+  timeZone = 'UTC',
+): DayRangeChoice | undefined {
+  const matching = DAY_RANGE_CHOICES.filter((days) => {
+    const range = calculateDayRange(maximumRange, days, timeZone);
+    return range.start === visibleRange.start && range.end === visibleRange.end;
+  });
+  if (matching.length === 0) return undefined;
+  if (chosen !== undefined && matching.includes(chosen)) return chosen;
+  return matching.includes(null) ? null : matching[0];
+}

@@ -77,12 +77,12 @@ def test_model_chains_and_ordering_are_correct_for_every_generated_configuration
             "main": [
                 ("icon_d2", "ICON-D2", 48),
                 ("icon_eu", "ICON-EU", 120),
-                ("ecmwf_ifs", "ECMWF IFS HRES 9km", 345),
+                ("ecmwf_ifs", "ECMWF IFS HRES 9km", 360),
             ],
             "cloud": [
                 ("icon_d2", "ICON-D2", 48),
                 ("icon_eu", "ICON-EU", 120),
-                ("ecmwf_ifs025", "ECMWF IFS 0.25°", 345),
+                ("ecmwf_ifs025", "ECMWF IFS 0.25°", 360),
             ],
         },
         {
@@ -91,26 +91,26 @@ def test_model_chains_and_ordering_are_correct_for_every_generated_configuration
             "main": [
                 ("geosphere_arome_austria", "GeoSphere AROME Austria", 60),
                 ("icon_eu", "ICON-EU", 120),
-                ("ecmwf_ifs", "ECMWF IFS HRES 9km", 345),
+                ("ecmwf_ifs", "ECMWF IFS HRES 9km", 360),
             ],
             "cloud": [
                 ("icon_d2", "ICON-D2", 48),
                 ("icon_eu", "ICON-EU", 120),
-                ("ecmwf_ifs025", "ECMWF IFS 0.25°", 345),
+                ("ecmwf_ifs025", "ECMWF IFS 0.25°", 360),
             ],
         },
         {
             "name": "Dolomiten",
             "loc_name": "Ortler",
             "main": [
-                ("italia_meteo_arpae_icon_2i", "ItaliaMeteo ARPAE ICON-2i", 67),
+                ("italia_meteo_arpae_icon_2i", "ItaliaMeteo ARPAE ICON-2i", 72),
                 ("icon_eu", "ICON-EU", 120),
-                ("ecmwf_ifs", "ECMWF IFS HRES 9km", 345),
+                ("ecmwf_ifs", "ECMWF IFS HRES 9km", 360),
             ],
             "cloud": [
                 ("icon_d2", "ICON-D2", 48),
                 ("icon_eu", "ICON-EU", 120),
-                ("ecmwf_ifs025", "ECMWF IFS 0.25°", 345),
+                ("ecmwf_ifs025", "ECMWF IFS 0.25°", 360),
             ],
         },
         {
@@ -119,26 +119,26 @@ def test_model_chains_and_ordering_are_correct_for_every_generated_configuration
             "main": [
                 ("meteoswiss_icon_ch1", "MeteoSwiss ICON CH1", 33),
                 ("meteoswiss_icon_ch2", "MeteoSwiss ICON CH2", 120),
-                ("ecmwf_ifs", "ECMWF IFS HRES 9km", 345),
+                ("ecmwf_ifs", "ECMWF IFS HRES 9km", 360),
             ],
             "cloud": [
                 ("icon_d2", "ICON-D2", 48),
                 ("icon_eu", "ICON-EU", 120),
-                ("ecmwf_ifs025", "ECMWF IFS 0.25°", 345),
+                ("ecmwf_ifs025", "ECMWF IFS 0.25°", 360),
             ],
         },
         {
             "name": "Westalpen",
             "loc_name": "Mont Blanc",
             "main": [
-                ("meteofrance_arome_france_hd", "AROME France HD", 46),
+                ("meteofrance_arome_france_hd", "AROME France HD", 51),
                 ("meteoswiss_icon_ch2", "MeteoSwiss ICON CH2", 120),
-                ("ecmwf_ifs", "ECMWF IFS HRES 9km", 345),
+                ("ecmwf_ifs", "ECMWF IFS HRES 9km", 360),
             ],
             "cloud": [
-                ("meteofrance_arome_france", "AROME France", 46),
+                ("meteofrance_arome_france", "AROME France", 51),
                 ("icon_eu", "ICON-EU", 120),
-                ("ecmwf_ifs025", "ECMWF IFS 0.25°", 345),
+                ("ecmwf_ifs025", "ECMWF IFS 0.25°", 360),
             ],
         },
     ]

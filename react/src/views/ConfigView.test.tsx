@@ -432,9 +432,10 @@ describe('Configuration List Toolbar, Duplication & Drag-and-Drop Reordering', (
     expect(addBtn).toBeTruthy();
 
     // Verify Duplicate button is immediately left of + in actions container
+    // ("Start from auto configuration" comes first.)
     const actionButtons = actionsContainer?.querySelectorAll('button');
-    expect(actionButtons?.[0]).toBe(dupBtn);
-    expect(actionButtons?.[1]).toBe(addBtn);
+    expect(actionButtons?.[1]).toBe(dupBtn);
+    expect(actionButtons?.[2]).toBe(addBtn);
 
     // Duplicate button must contain no text ("Duplicate"), only the icon
     expect(dupBtn.textContent?.trim()).toBe('');
@@ -443,6 +444,51 @@ describe('Configuration List Toolbar, Duplication & Drag-and-Drop Reordering', (
     // Delete button must NOT exist in the editor header (which itself is removed)
     const editorHeader = document.querySelector('.editor-header');
     expect(editorHeader).toBeNull();
+  });
+
+  it('saves the layout chosen in the Model chains tab editor (#199)', async () => {
+    const saveSpy = vi
+      .spyOn(apiService, 'saveConfiguration')
+      .mockImplementation(async (cfg) => cfg);
+    render(
+      <ConfigView activeTab="chains" selectedConfigId="cfg-b" onSelectConfig={vi.fn()} />,
+    );
+    const select = (await screen.findByLabelText(
+      'Meteogram layout',
+    )) as HTMLSelectElement;
+    await waitFor(() => {
+      expect(Array.from(select.options).map((o) => o.value)).toContain(
+        'power-default',
+      );
+    });
+    // The Default entry is the empty choice, listed once (#203).
+    expect(Array.from(select.options).map((o) => [o.value, o.textContent])).toEqual([
+      ['', 'Default'],
+      ['power-default', 'Power default'],
+    ]);
+    fireEvent.change(select, { target: { value: 'power-default' } });
+    await waitFor(() => {
+      expect(saveSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'cfg-b', layout_id: 'power-default' }),
+      );
+    });
+    expect(select.value).toBe('power-default');
+
+    fireEvent.change(select, { target: { value: '' } });
+    await waitFor(() => {
+      expect(saveSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ id: 'cfg-b', layout_id: null }),
+      );
+    });
+  });
+
+  it('has no per-configuration layout list in the Meteogram tab (#199)', async () => {
+    render(
+      <ConfigView activeTab="meteogram" selectedConfigId="cfg-a" onSelectConfig={vi.fn()} />,
+    );
+    await screen.findByTestId('layout-list');
+    expect(screen.queryByTestId('layout-config-table')).toBeNull();
+    expect(screen.queryByLabelText('Meteogram configuration for Config Beta')).toBeNull();
   });
 
   it('disables delete button when only 1 configuration exists', async () => {

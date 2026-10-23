@@ -8,51 +8,12 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 from .models import MeteogramConfig, WeatherModel, Location
 from ..resources import model_resource
+from .quantities import expected_quantities, open_meteo_names
 
 logger = logging.getLogger(__name__)
 
-VARIABLE_TO_OPENMETEO = {
-    "temperature": "temperature_2m",
-    "temperature_2m": "temperature_2m",
-    "apparent_temperature": "apparent_temperature",
-    "wind_speed": "wind_speed_10m",
-    "wind_speed_10m": "wind_speed_10m",
-    "wind_gusts": "wind_gusts_10m",
-    "wind_gusts_10m": "wind_gusts_10m",
-    "wind_direction": "wind_direction_10m",
-    "wind_direction_10m": "wind_direction_10m",
-    "cloud_cover": "cloud_cover",
-    "precipitation": "precipitation",
-    "precipitation_probability": "precipitation_probability",
-    "weather_code": "weather_code",
-    "cape": "cape",
-    "cin": "convective_inhibition",
-    "convective_inhibition": "convective_inhibition",
-    "lightning_potential": "lightning_potential",
-}
-
-WEATHER_ICON_VARIABLES = ["weather_code"]
-
-CONVECTIVE_VARIABLES = ["cape", "convective_inhibition", "lightning_potential"]
-
-DEFAULT_VARIABLES = [
-    "temperature",
-    "apparent_temperature",
-    "wind_speed",
-    "wind_gusts",
-    "wind_direction",
-    "cloud_cover",
-    "precipitation",
-    "precipitation_probability",
-]
-
-# Core variables required for minimal forecast usefulness
-CORE_VARIABLES = [
-    "temperature",
-    "wind_speed",
-    "cloud_cover",
-    "precipitation",
-]
+# Id, Open-Meteo name or alias -> Open-Meteo hourly name (quantity registry).
+VARIABLE_TO_OPENMETEO = open_meteo_names()
 
 MODEL_TO_OPENMETEO = {
     "ICON-D2": "icon_d2",
@@ -167,7 +128,7 @@ def merge_catalog_entries(
 
 
 def _load_raw_catalog_file() -> List[Dict[str, Any]]:
-    for filename in ("model_catalogue.json", "model_catalog.json"):
+    for filename in ("model_catalogue.json",):
         resource = model_resource(filename)
         if resource.is_file():
             try:
@@ -214,8 +175,8 @@ def _process_catalog_raw_data(
         ]
         item["supported_variables"] = supported_vars
 
-        # Calculate missing optional variables from DEFAULT_VARIABLES
-        missing = [v for v in DEFAULT_VARIABLES if v not in supported_vars]
+        # Expected (non-optional) quantities the model does not list
+        missing = [v for v in expected_quantities() if v not in supported_vars]
         item["missing_variables"] = missing
 
         # Filter out truly unsuitable models (e.g. fewer than 2 supported variables)
@@ -505,6 +466,57 @@ def resolve_vertical_cloud_source(
     return candidates[0]
 
 
+# Open-Meteo stores model runs under data paths that differ from some API
+# model ids (`https://api.open-meteo.com/data/<path>/static/meta.json`).
+MODEL_META_PATH_ALIASES = {
+    "icon_global": "dwd_icon",
+    "icon_eu": "dwd_icon_eu",
+    "icon_d2": "dwd_icon_d2",
+    "ncep_gfs_global": "ncep_gfs013",
+    "gfs_global": "ncep_gfs013",
+    "meteofrance_arpege_world": "meteofrance_arpege_world025",
+    "meteofrance_arome_france": "meteofrance_arome_france0025",
+    "metno_nordic": "metno_nordic_pp",
+}
+
+
+# Ensemble behind each model's ``precipitation_probability`` (named by the
+# Single Runs API error for that variable).
+ENSEMBLE_META_PATHS = {
+    "meteoswiss_icon_ch1": "meteoswiss_icon_ch1_ensemble",
+    "meteoswiss_icon_ch2": "meteoswiss_icon_ch2_ensemble",
+    # Since 2026-10-06 Open-Meteo keeps the DWD EPS only on the native
+    # icosahedral grid; the old paths' meta.json stayed at the 06.10. run
+    # (open-meteo/open-meteo#2194).
+    "icon_global": "dwd_icon_global_eps_native",
+    "icon_eu": "dwd_icon_eu_eps_native",
+    "icon_d2": "dwd_icon_d2_eps_native",
+    "ecmwf_ifs": "ecmwf_ifs025_ensemble",
+    "ecmwf_ifs025": "ecmwf_ifs025_ensemble",
+    "ncep_gfs_global": "ncep_gefs05",
+    "gfs_global": "ncep_gefs05",
+    "cmc_gem_gdps": "cmc_gem_geps",
+    "ukmo_global_deterministic_10km": "ukmo_global_ensemble_20km",
+    "ukmo_uk_deterministic_2km": "ukmo_uk_ensemble_2km",
+}
+
+SINGLE_RUNS_URL = "https://single-runs-api.open-meteo.com/v1/forecast"
+
+
+def model_meta_path(model_id: str) -> Optional[str]:
+    """Return the Open-Meteo metadata path for a model, or None for blends."""
+    model_id = (model_id or "").lower()
+    if not model_id or model_id == "best_match" or "seamless" in model_id:
+        return None
+    return MODEL_META_PATH_ALIASES.get(model_id, model_id)
+
+
+def ensemble_meta_path(model_id: str) -> Optional[str]:
+    """Return the metadata path of the ensemble delivering the model's
+    precipitation probability, or None if unknown."""
+    return ENSEMBLE_META_PATHS.get((model_id or "").lower())
+
+
 class OpenMeteoClient:
     RETRYABLE_STATUS_CODES = {500, 502, 503, 504}
 
@@ -564,6 +576,54 @@ class OpenMeteoClient:
 
         raise RuntimeError("Open-Meteo request exhausted without a response")
 
+    async def fetch_model_metadata(self, model_id: str) -> Dict[str, Any]:
+        """Fetch run metadata (e.g. ``last_run_initialisation_time``).
+
+        Returns an empty dict for blended models or unknown paths.
+        """
+        return await self._fetch_meta_json(model_meta_path(model_id))
+
+    async def fetch_ensemble_metadata(self, model_id: str) -> Dict[str, Any]:
+        """Fetch run metadata of the ensemble behind the model's
+        precipitation probability; empty dict if there is none."""
+        return await self._fetch_meta_json(ensemble_meta_path(model_id))
+
+    async def _fetch_meta_json(self, path: Optional[str]) -> Dict[str, Any]:
+        if path is None:
+            return {}
+        url = f"https://api.open-meteo.com/data/{path}/static/meta.json"
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.get(url)
+            if response.status_code == 404:
+                return {}
+            response.raise_for_status()
+            data = response.json()
+        return data if isinstance(data, dict) else {}
+
+    async def fetch_single_run(
+        self,
+        model_id: str,
+        run: str,
+        latitude: float,
+        longitude: float,
+        forecast_hours: int,
+    ) -> Dict[str, Any]:
+        """Fetch one specific model run from the Open-Meteo Single Runs API."""
+        params = {
+            "latitude": latitude,
+            "longitude": longitude,
+            "models": model_id,
+            "run": run,
+            "hourly": "temperature_2m",
+            "forecast_hours": forecast_hours,
+            "timezone": "GMT",
+        }
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.get(SINGLE_RUNS_URL, params=params)
+            response.raise_for_status()
+            data = response.json()
+        return data if isinstance(data, dict) else {}
+
     async def fetch_data(
         self, config: MeteogramConfig, variables: Optional[List[str]] = None
     ) -> Dict[str, Any]:
@@ -571,7 +631,7 @@ class OpenMeteoClient:
         Fetches forecast data for a given configuration from the Open-Meteo API.
         """
         models = [to_open_meteo_model(m.name) for m in config.model_chain]
-        vars_to_fetch = variables or DEFAULT_VARIABLES
+        vars_to_fetch = variables or expected_quantities()
         openmeteo_vars = [
             VARIABLE_TO_OPENMETEO.get(v, v) for v in vars_to_fetch
         ]

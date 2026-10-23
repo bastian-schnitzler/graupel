@@ -5,6 +5,8 @@ import {
   getPreviousLocalMidnight,
   normalizeWheelZoomDirection,
   type TimeRange,
+  calculateDayRange,
+  findActiveDayRange,
 } from './meteogramZoom';
 
 const maximumRange: TimeRange = { start: 0, end: 240 * HOUR_MS };
@@ -107,5 +109,47 @@ describe('zoom input and local maximum range', () => {
       Date.parse('2026-09-14T15:00:00Z'),
       'Europe/Berlin',
     )).toISOString()).toBe('2026-09-12T22:00:00.000Z');
+  });
+});
+
+describe('day-range buttons (spec §16.1, #162)', () => {
+  const DAY = 24 * 3600 * 1000;
+  // Yesterday 00:00 Berlin (CEST, UTC+2) to 16 days later.
+  const start = Date.UTC(2026, 9, 19, 22);
+  const maximum = { start, end: start + 16 * DAY + 3600 * 1000 };
+
+  it('spans N local days from the timeline start', () => {
+    expect(calculateDayRange(maximum, 4, 'Europe/Berlin')).toEqual({
+      start,
+      end: start + 4 * DAY,
+    });
+    expect(calculateDayRange(maximum, null, 'Europe/Berlin')).toEqual(maximum);
+  });
+
+  it('keeps local midnight across a DST change', () => {
+    // 25 Oct 2026: CEST -> CET, that day has 25 hours.
+    const end = calculateDayRange(maximum, 7, 'Europe/Berlin').end;
+    expect(end - start).toBe(7 * DAY + 3600 * 1000);
+    expect(new Date(end).toISOString()).toBe('2026-10-26T23:00:00.000Z');
+  });
+
+  it('clamps to the available range', () => {
+    const short = { start, end: start + 5 * DAY };
+    expect(calculateDayRange(short, 7, 'UTC')).toEqual(short);
+    expect(calculateDayRange(short, 14, 'UTC')).toEqual(short);
+  });
+
+  it('highlights the matching button, the chosen one when several match', () => {
+    expect(
+      findActiveDayRange({ start, end: start + 10 * DAY }, maximum, undefined, 'UTC'),
+    ).toBe(10);
+    const short = { start, end: start + 5 * DAY };
+    // 7, 14 and All all equal the 5 available days: nothing chosen -> All.
+    expect(findActiveDayRange(short, short, undefined, 'UTC')).toBeNull();
+    expect(findActiveDayRange(short, short, 14, 'UTC')).toBe(14);
+    // Wheel zoom: no button matches.
+    expect(
+      findActiveDayRange({ start, end: start + 3 * DAY }, maximum, 4, 'UTC'),
+    ).toBeUndefined();
   });
 });

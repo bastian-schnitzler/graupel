@@ -1,4 +1,5 @@
 import type { DataPoint } from '../types';
+import { getAxisPreset } from '../layouts/seriesPresets';
 
 export interface DailyExtremeItem {
   dayKey: string;
@@ -55,19 +56,11 @@ export function calculateTemperatureExtremes(
     }
   }
 
-  const rawMin = globalMin !== Infinity ? globalMin : 0;
-  const rawMax = globalMax !== -Infinity ? globalMax : 20;
-
-  let min = Math.floor(rawMin - 2);
-  let max = Math.ceil(rawMax + 2);
-
-  if (rawMin <= 15 && min > 0) {
-    min = 0;
-  }
-  if (rawMax >= -15 && max < 0) {
-    max = 0;
-  }
-
+  // Same rule as the temperature axis of the layouts (range "auto").
+  const [min, max] = getAxisPreset('temperature').auto!(
+    globalMin !== Infinity ? globalMin : null,
+    globalMax !== -Infinity ? globalMax : null,
+  );
   return { minTemp: min, maxTemp: max };
 }
 
@@ -111,6 +104,36 @@ export function calculateMaxPrecipitation(
   return max;
 }
 
+/**
+ * Calculates the wind Y-axis maximum (speed and gusts) across all models, so
+ * moving model boundaries doesn't rescale the axis (like precipitation).
+ */
+export function calculateMaxWind(
+  modelForecasts: Record<string, DataPoint[]> | undefined,
+  displayedWinds: number[],
+): number {
+  let max: number | null = null;
+  const consider = (value: unknown) => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      max = max === null ? value : Math.max(max, value);
+    }
+  };
+  if (modelForecasts && typeof modelForecasts === 'object') {
+    for (const pts of Object.values(modelForecasts)) {
+      if (!Array.isArray(pts)) continue;
+      for (const pt of pts) {
+        if (pt && (pt.variable === 'wind_speed' || pt.variable === 'wind_gusts')) {
+          consider(pt.value);
+        }
+      }
+    }
+  }
+  displayedWinds.forEach(consider);
+
+  // Same rule as the wind axis of the layouts (range "zero-based").
+  return getAxisPreset('wind_speed').zeroBasedMax!(max);
+}
+
 interface CalculateDailyTemperatureExtremesParams {
   dayGroups: { dayKey: string; indices: number[] }[];
   timestamps: number[];
@@ -124,6 +147,10 @@ interface CalculateDailyTemperatureExtremesParams {
   svgWidth: number;
   timeline: { contains: (ts: number) => boolean };
   getX: (ts: number) => number;
+  /** Plot paddings of the curve's scale (temperature panel: 22 / 10). */
+  paddingTop?: number;
+  paddingBottom?: number;
+  unit?: string;
 }
 
 /**
@@ -142,8 +169,11 @@ export function calculateDailyTemperatureExtremes({
   svgWidth,
   timeline,
   getX,
+  paddingTop = 22,
+  paddingBottom = 10,
+  unit = '°C',
 }: CalculateDailyTemperatureExtremesParams): DailyExtremeItem[] {
-  const tempUsableHeight = tempHeight - 22 - 10;
+  const tempUsableHeight = tempHeight - paddingTop - paddingBottom;
   const tempRange = maxTemp - minTemp || 1;
 
   const result = dayGroups
@@ -175,15 +205,17 @@ export function calculateDailyTemperatureExtremes({
 
       const maxX = getX(timestamps[maxPt.idx]);
       const maxNorm = (maxPt.val - minTemp) / tempRange;
-      const maxY = tempTop + tempHeight - 10 - maxNorm * tempUsableHeight;
+      const maxY =
+        tempTop + tempHeight - paddingBottom - maxNorm * tempUsableHeight;
 
       const minX = getX(timestamps[minPt.idx]);
       const minNorm = (minPt.val - minTemp) / tempRange;
-      const minY = tempTop + tempHeight - 10 - minNorm * tempUsableHeight;
+      const minY =
+        tempTop + tempHeight - paddingBottom - minNorm * tempUsableHeight;
 
       const formatTemp = (v: number) => {
         const rounded = Math.round(v);
-        return `${Object.is(rounded, -0) ? 0 : rounded}°C`;
+        return `${Object.is(rounded, -0) ? 0 : rounded}${unit}`;
       };
 
       return {

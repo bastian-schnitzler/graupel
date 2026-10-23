@@ -1,4 +1,9 @@
-import type { Location, MeteogramConfig } from "../../types";
+import type {
+  AutoChainInfo,
+  Location,
+  MeteogramConfig,
+  WeatherModel,
+} from "../../types";
 import {
   getNextConfigurationName,
   getDuplicateConfigurationName,
@@ -69,6 +74,41 @@ export function createDuplicateConfigurationPayload(
     model_chain: sourceChain.map((m) => ({ ...m })),
     main_model_chain: sourceChain.map((m) => ({ ...m })),
     cloud_model_chain: sourceCloudChain.map((m) => ({ ...m })),
+  };
+}
+
+/** Chain entries as the chain builder stores them (catalogue id + horizon). */
+const toStoredChain = (chain: WeatherModel[] | undefined): WeatherModel[] =>
+  (chain || []).map((m) => ({
+    ...(m.id ? { id: m.id } : {}),
+    name: m.name,
+    ...(m.short_name ? { short_name: m.short_name } : {}),
+    max_forecast_horizon_hours: m.max_forecast_horizon_hours,
+  }));
+
+/**
+ * New configuration from an auto chain (system.md §6.5): the region's (or the
+ * location's) main and cloud chain at `location`. Named after the region,
+ * else `fallbackName`, numbered when the name is taken.
+ */
+export function createAutoConfigurationPayload(
+  configs: MeteogramConfig[],
+  location: Location,
+  info: AutoChainInfo,
+  fallbackName?: string,
+): MeteogramConfig {
+  const base =
+    info.region_name?.trim() || fallbackName?.trim() || location.name || "Auto";
+  const taken = configs.some(
+    (c) => c.name.trim().toLowerCase() === base.toLowerCase(),
+  );
+  const main = toStoredChain(info.main_model_chain);
+  return {
+    name: taken ? getDuplicateConfigurationName(base, configs) : base,
+    location: { ...location },
+    model_chain: main,
+    main_model_chain: main.map((m) => ({ ...m })),
+    cloud_model_chain: toStoredChain(info.cloud_model_chain),
   };
 }
 

@@ -1,6 +1,7 @@
 import logging
 from typing import List, Dict, Optional
 from .models import RawForecastData, DataPoint
+from .quantities import target_units, variable_aliases
 from .timeline import (
     canonical_timestamp,
     validate_timestamp_sequence,
@@ -16,51 +17,10 @@ class Harmonizer:
     variable names, or temporal resolutions into a common schema: DataPoint(timestamp, value, unit, variable, model).
     """
 
-    VARIABLE_MAPPING = {
-        "temperature": "temperature",
-        "temperature_2m": "temperature",
-        "temp_2m": "temperature",
-        "temp": "temperature",
-        "t2m": "temperature",
-        "apparent_temperature": "apparent_temperature",
-        "apparent_temp": "apparent_temperature",
-        "feels_like": "apparent_temperature",
-        "wind_speed": "wind_speed",
-        "wind_speed_10m": "wind_speed",
-        "windspeed_10m": "wind_speed",
-        "wind_gusts": "wind_gusts",
-        "wind_gusts_10m": "wind_gusts",
-        "windgusts_10m": "wind_gusts",
-        "wind_direction": "wind_direction",
-        "wind_direction_10m": "wind_direction",
-        "winddirection_10m": "wind_direction",
-        "cloud_cover": "cloud_cover",
-        "cloudcover": "cloud_cover",
-        "precipitation": "precipitation",
-        "precip": "precipitation",
-        "precipitation_probability": "precipitation_probability",
-        "precip_prob": "precipitation_probability",
-        "pop": "precipitation_probability",
-        "cape": "cape",
-        "cin": "convective_inhibition",
-        "convective_inhibition": "convective_inhibition",
-        "lpi": "lightning_potential",
-        "lightning_potential": "lightning_potential",
-    }
+    # Lower-case raw names -> quantity id, and target units (quantity registry).
+    VARIABLE_MAPPING = variable_aliases()
 
-    TARGET_UNITS = {
-        "temperature": "°C",
-        "apparent_temperature": "°C",
-        "wind_speed": "km/h",
-        "wind_gusts": "km/h",
-        "wind_direction": "°",
-        "cloud_cover": "%",
-        "precipitation": "mm",
-        "precipitation_probability": "%",
-        "cape": "J/kg",
-        "convective_inhibition": "J/kg",
-        "lightning_potential": "J/kg",
-    }
+    TARGET_UNITS = target_units()
 
     @classmethod
     def normalize_variable(cls, raw_variable: str) -> str:

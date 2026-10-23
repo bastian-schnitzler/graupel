@@ -66,6 +66,57 @@ describe("ChartTooltip", () => {
     );
   });
 
+  it("colors CAPE and CIN values like their bars", () => {
+    render(
+      <ChartTooltip
+        isFullscreen={false}
+        hoverData={dummyData}
+        hoverX={150}
+        hoverDateObj={dummyDate}
+        hoverDateParts={dummyParts}
+        popupPos={dummyPos}
+        popupRef={popupRef}
+        hoverTimestamp={dummyDate.getTime()}
+        accumulatedPrecip={null}
+      />,
+    );
+
+    expect(screen.getByTestId("tooltip-val-cape").className).toBe("val cape");
+    expect(
+      screen.getByTestId("tooltip-val-convective_inhibition").className,
+    ).toBe("val cin");
+  });
+
+  it("separates the metric groups and keeps snow accumulation in the snow group", () => {
+    render(
+      <ChartTooltip
+        isFullscreen={false}
+        hoverData={{
+          ...dummyData,
+          snowfall: createPoint("snowfall", 1, "cm"),
+          snow_depth: createPoint("snow_depth", 0.2, "m"),
+        }}
+        hoverX={150}
+        hoverDateObj={dummyDate}
+        hoverDateParts={dummyParts}
+        popupPos={dummyPos}
+        popupRef={popupRef}
+        hoverTimestamp={dummyDate.getTime()}
+        accumulatedPrecip={5.25}
+        accumulatedSnowfall={2.5}
+      />,
+    );
+    const grid = screen.getByTestId("tooltip-divider-temperature").parentElement!;
+    const children = Array.from(grid.children);
+    const position = (testId: string) => children.indexOf(screen.getByTestId(testId));
+    expect(position("tooltip-divider-temperature")).toBeLessThan(position("tooltip-divider-wind"));
+    expect(position("tooltip-divider-wind")).toBeLessThan(position("accumulated-precip-row"));
+    expect(position("accumulated-precip-row")).toBeLessThan(position("tooltip-divider-precipitation"));
+    expect(position("tooltip-divider-precipitation")).toBeLessThan(position("snowfall-row"));
+    expect(position("snow-depth-row")).toBeLessThan(position("accumulated-snowfall-row"));
+    expect(position("accumulated-snowfall-row")).toBeLessThan(position("tooltip-divider-snow"));
+  });
+
   it("does not render when isFullscreen is true", () => {
     render(
       <ChartTooltip

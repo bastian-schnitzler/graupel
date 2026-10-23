@@ -10,7 +10,18 @@ import type {
   DetailedCloudForecast,
   VerticalCloudTransition,
   SunPeriod,
+  AppSettings,
+  StoredLayout,
+  AutoChainEntry,
+  AutoChainInfo,
+  RegionSummary,
+  ArchiveStats,
+  ArchivedFetchSummary,
+  HistoricForecast,
+  DataDirCopyParts,
+  DataDirInfo,
 } from "../types";
+import { FALLBACK_AUTO_CHAIN } from "../utils/autoChain";
 import {
   DEFAULT_MODEL_CHAIN,
   DEFAULT_CLOUD_MODEL_CHAIN,
@@ -23,12 +34,28 @@ import {
   normalizeTimestamp,
   uniqueSortedTimestamps,
 } from "../utils/timeline";
+import {
+  createLibraryEntry,
+  deleteLibraryEntry,
+  duplicateLibraryEntry,
+  insertLayout,
+  reorderLibrary,
+  resetLibraryEntry,
+  seedLayoutLibrary,
+  updateLibraryEntry,
+} from "../layouts/layoutLibrary.logic";
+import {
+  hourlyQuantityIds,
+  isRequestedFromModel,
+  setQuantityRegistry,
+} from "../quantities/registry";
 
 declare global {
   interface Window {
     pywebview?: {
       api?: {
         get_models: () => Promise<ModelMetadata[]>;
+        get_quantity_registry?: () => Promise<unknown>;
         get_configurations: () => Promise<MeteogramConfig[]>;
         create_configuration?: (
           config: MeteogramConfig,
@@ -55,6 +82,18 @@ declare global {
           configurationId?: string,
           variables?: string[],
         ) => Promise<HarmonizedForecastResponse>;
+        get_auto_forecast?: (
+          location: Location,
+          variables?: string[],
+        ) => Promise<HarmonizedForecastResponse>;
+        resolve_auto_chain?: (
+          latitude: number,
+          longitude: number,
+          elevation?: number | null,
+        ) => Promise<AutoChainInfo>;
+        list_regions?: () => Promise<RegionSummary[]>;
+        get_region_chains?: (regionId: string) => Promise<AutoChainInfo | null>;
+        list_auto_chains?: () => Promise<AutoChainEntry[]>;
         log_ui_error?: (
           typescript_function: string,
           api_function: string,
@@ -65,6 +104,7 @@ declare global {
           api_function_output_data: any,
         ) => Promise<void>;
         open_external_url?: (url: string) => Promise<boolean>;
+        copy_png_to_clipboard?: (pngBase64: string) => Promise<boolean>;
         move_cursor_to?: (
           screenX: number,
           screenY: number,
@@ -73,12 +113,58 @@ declare global {
         record_location_selection?: (
           location: Location,
         ) => Promise<{ success: boolean }>;
-        get_most_used_locations?: (limit?: number) => Promise<Location[]>;
+        get_most_used_locations?: (limit?: number | null) => Promise<Location[]>;
         get_user_timezone?: () => Promise<string>;
+        get_settings?: () => Promise<AppSettings>;
+        update_settings?: (
+          changes: Partial<AppSettings>,
+        ) => Promise<AppSettings>;
+        get_layouts?: () => Promise<StoredLayout[]>;
+        create_layout?: (
+          name: string,
+          layout?: unknown,
+          position?: number,
+        ) => Promise<StoredLayout>;
+        duplicate_layout?: (id: string) => Promise<StoredLayout>;
+        update_layout?: (
+          id: string,
+          changes: { name?: string; layout?: unknown },
+        ) => Promise<StoredLayout>;
+        reset_layout?: (id: string) => Promise<StoredLayout>;
+        delete_layout?: (id: string) => Promise<{ success: boolean }>;
+        reorder_layouts?: (ids: string[]) => Promise<StoredLayout[]>;
+        get_data_dir?: () => Promise<DataDirInfo>;
+        choose_data_dir?: () => Promise<string | null>;
+        open_data_dir?: () => Promise<{ ok: boolean; error: string | null }>;
+        change_data_dir?: (
+          path: string,
+          copyConfiguration: boolean,
+          copyMeteogram: boolean,
+        ) => Promise<{ data_dir: string; previous_data_dir: string }>;
+        get_archive_stats?: () => Promise<ArchiveStats>;
+        list_archived_forecasts?: (
+          latitude: number,
+          longitude: number,
+          radiusKm?: number,
+        ) => Promise<ArchivedFetchSummary[]>;
+        get_historic_forecast?: (
+          fetchId: number,
+        ) => Promise<HistoricForecast | null>;
+        delete_archive?: () => Promise<{ success: boolean }>;
       };
     };
   }
 }
+
+const SETTINGS_STORAGE_KEY = "graupel_settings_v1";
+// v2: the fixed entry is "default" (#203); v1 libraries are reseeded.
+const LAYOUTS_STORAGE_KEY = "graupel_layouts_v2";
+
+export const FALLBACK_SETTINGS: AppSettings = {
+  mode: "power",
+  archive_enabled: false,
+  archive_retention_days: 365,
+};
 
 class ApiService {
   private currentRequestId = 0;
@@ -156,17 +242,10 @@ class ApiService {
 
     const forecastStartTime = forecastStart.toISOString();
 
-    const variables = [
-      "temperature",
-      "apparent_temperature",
-      "wind_speed",
-      "wind_gusts",
-      "wind_direction",
-      "cloud_cover",
-      "precipitation",
-      "precipitation_probability",
-      "weather_code",
-    ];
+    // Mock models list no optional capabilities (CAPE, CIN, LPI).
+    const variables = hourlyQuantityIds().filter((id) =>
+      isRequestedFromModel(id, []),
+    );
 
     const modelForecasts: Record<string, DataPoint[]> = {};
 
@@ -347,7 +426,23 @@ class ApiService {
       timeline_start: timelineStart,
       timeline_end: timelineEnd,
       user_timezone: this.cachedUserTimezone || "Europe/Berlin",
+      generated_at: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Loads the backend quantity registry; keeps the built-in copy when the
+   * bridge is missing or answers with something unusable.
+   */
+  async loadQuantityRegistry(): Promise<boolean> {
+    const api = this.isPywebviewAvailable() ? window.pywebview?.api : undefined;
+    if (!api?.get_quantity_registry) return false;
+    try {
+      return setQuantityRegistry(await api.get_quantity_registry());
+    } catch (e) {
+      console.error("Failed to load quantity registry from backend", e);
+      return false;
+    }
   }
 
   async getModels(): Promise<ModelMetadata[]> {
@@ -649,6 +744,88 @@ class ApiService {
     return this.generateMockForecast(targetLoc, cfg);
   }
 
+  /**
+   * Main and cloud chain normal mode uses for a location (system.md §6.3).
+   * Without a resolver bridge the global fallback chain is used.
+   */
+  async resolveAutoChain(location: Location): Promise<AutoChainInfo> {
+    const api = this.isPywebviewAvailable() ? window.pywebview?.api : undefined;
+    if (api?.resolve_auto_chain) {
+      return await api.resolve_auto_chain(
+        location.latitude,
+        location.longitude,
+        location.elevation ?? null,
+      );
+    }
+    return FALLBACK_AUTO_CHAIN;
+  }
+
+  /** Auto chain regions (system.md §6.5); empty without a bridge. */
+  async listRegions(): Promise<RegionSummary[]> {
+    const api = this.isPywebviewAvailable() ? window.pywebview?.api : undefined;
+    if (api?.list_regions) {
+      return (await api.list_regions()) || [];
+    }
+    return [];
+  }
+
+  /** Chains without their own region (#198); empty without a bridge. */
+  async listAutoChains(): Promise<AutoChainEntry[]> {
+    const api = this.isPywebviewAvailable() ? window.pywebview?.api : undefined;
+    if (api?.list_auto_chains) {
+      return (await api.list_auto_chains()) || [];
+    }
+    return [];
+  }
+
+  /** A region's chains without a point (system.md §6.5); null if unknown. */
+  async getRegionChains(regionId: string): Promise<AutoChainInfo | null> {
+    const api = this.isPywebviewAvailable() ? window.pywebview?.api : undefined;
+    if (api?.get_region_chains) {
+      return await api.get_region_chains(regionId);
+    }
+    return null;
+  }
+
+  /**
+   * Normal-mode forecast (system.md §3.3): the backend resolves the auto chain
+   * itself and drops models without data; `config` (the resolved auto
+   * configuration) is only used by the standalone mock.
+   */
+  async getAutoForecast(
+    location: Location,
+    config: MeteogramConfig,
+  ): Promise<HarmonizedForecastResponse> {
+    const requestId = ++this.currentRequestId;
+    const api = this.isPywebviewAvailable() ? window.pywebview?.api : undefined;
+    if (api?.get_auto_forecast) {
+      const res = await api.get_auto_forecast(location);
+      if (requestId !== this.currentRequestId) {
+        throw new Error("STALE_REQUEST");
+      }
+      if (res?.user_timezone) {
+        this.cachedUserTimezone = res.user_timezone;
+      }
+      return res;
+    }
+    if (api) {
+      // Older bridge without auto chain support: stored-config forecast.
+      return this.getForecast(location);
+    }
+    await new Promise((r) => setTimeout(r, 100));
+    if (requestId !== this.currentRequestId) {
+      throw new Error("STALE_REQUEST");
+    }
+    return {
+      ...this.generateMockForecast(location, config),
+      auto_chain: {
+        ...FALLBACK_AUTO_CHAIN,
+        main_model_chain: config.main_model_chain || config.model_chain,
+        cloud_model_chain: config.cloud_model_chain || [],
+      },
+    };
+  }
+
   async refreshForecast(
     location?: Location,
     configurationId?: string,
@@ -694,6 +871,44 @@ class ApiService {
       return window.open(url, "_blank", "noopener,noreferrer") !== null;
     } catch (err) {
       console.warn("Failed to open external attribution URL:", err);
+      return false;
+    }
+  }
+
+  /**
+   * Copy a PNG to the system clipboard. The browser Clipboard API runs first
+   * (it must start inside the click, so it gets the pending image); when it
+   * is unavailable or rejected, the Python bridge writes the clipboard.
+   */
+  async copyPngToClipboard(png: Promise<Blob>): Promise<boolean> {
+    // Without a handler, a rejected render would surface as unhandled.
+    png.catch(() => undefined);
+    if (
+      typeof navigator !== "undefined" &&
+      navigator.clipboard?.write &&
+      typeof ClipboardItem !== "undefined"
+    ) {
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({ "image/png": png }),
+        ]);
+        return true;
+      } catch (err) {
+        console.warn("Clipboard API rejected the PNG, trying bridge:", err);
+      }
+    }
+    const copyViaBridge = window.pywebview?.api?.copy_png_to_clipboard;
+    if (!copyViaBridge) return false;
+    try {
+      const bytes = new Uint8Array(await (await png).arrayBuffer());
+      let binary = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+      }
+      return (await copyViaBridge(btoa(binary))) ?? false;
+    } catch (err) {
+      console.warn("Copying the PNG via bridge failed:", err);
       return false;
     }
   }
@@ -983,14 +1198,250 @@ class ApiService {
     }
   }
 
-  async getMostUsedLocations(limit = 10): Promise<Location[]> {
+  /**
+   * App settings. Without a settings bridge (older backend, standalone dev
+   * build) the app runs in power mode, where nothing is hidden.
+   */
+  async getSettings(): Promise<AppSettings> {
+    const api = this.isPywebviewAvailable() ? window.pywebview?.api : undefined;
+    if (api?.get_settings) {
+      return { ...FALLBACK_SETTINGS, ...(await api.get_settings()) };
+    }
+    return { ...FALLBACK_SETTINGS, ...this.readLocalSettings() };
+  }
+
+  /** Stores `changes`; rejects (and stores nothing) when the backend does. */
+  async updateSettings(changes: Partial<AppSettings>): Promise<AppSettings> {
+    const api = this.isPywebviewAvailable() ? window.pywebview?.api : undefined;
+    if (api?.update_settings) {
+      return { ...FALLBACK_SETTINGS, ...(await api.update_settings(changes)) };
+    }
+    const next = {
+      ...FALLBACK_SETTINGS,
+      ...this.readLocalSettings(),
+      ...changes,
+    };
+    try {
+      window.localStorage?.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
+    } catch (e) {
+      console.warn("Failed to store settings locally:", e);
+    }
+    return next;
+  }
+
+  // --- Meteogram configurations (layout library, system.md §4.3, #168) ---
+  // Without a bridge the library lives in localStorage and follows the
+  // backend rules (`layoutLibrary.logic.ts`).
+
+  private layoutBridge() {
+    const api = this.isPywebviewAvailable() ? window.pywebview?.api : undefined;
+    return api?.get_layouts ? api : undefined;
+  }
+
+  private readLocalLayouts(): StoredLayout[] {
+    try {
+      const raw = window.localStorage?.getItem(LAYOUTS_STORAGE_KEY);
+      const parsed = raw ? (JSON.parse(raw) as StoredLayout[]) : null;
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch {
+      // fall through to the seeded library
+    }
+    return seedLayoutLibrary();
+  }
+
+  private writeLocalLayouts(layouts: StoredLayout[]): StoredLayout[] {
+    try {
+      window.localStorage?.setItem(
+        LAYOUTS_STORAGE_KEY,
+        JSON.stringify(layouts),
+      );
+    } catch (e) {
+      console.warn("Failed to store layouts locally:", e);
+    }
+    return layouts;
+  }
+
+  private localLayout(layouts: StoredLayout[], id: string): StoredLayout {
+    const found = layouts.find((layout) => layout.id === id);
+    if (!found) throw new Error(`Layout with id ${id} not found`);
+    return found;
+  }
+
+  async getLayouts(): Promise<StoredLayout[]> {
+    const api = this.layoutBridge();
+    if (api?.get_layouts) return api.get_layouts();
+    return this.readLocalLayouts();
+  }
+
+  async createLayout(
+    name: string,
+    layout?: unknown,
+    position?: number,
+  ): Promise<StoredLayout> {
+    const api = this.layoutBridge();
+    if (api?.create_layout) return api.create_layout(name, layout, position);
+    if (!name.trim()) throw new Error("layout name must not be empty");
+    const created = createLibraryEntry(
+      `layout-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name,
+      layout,
+    );
+    const layouts = insertLayout(this.readLocalLayouts(), created, position);
+    this.writeLocalLayouts(layouts);
+    return this.localLayout(layouts, created.id);
+  }
+
+  async duplicateLayout(id: string): Promise<StoredLayout> {
+    const api = this.layoutBridge();
+    if (api?.duplicate_layout) return api.duplicate_layout(id);
+    const current = this.readLocalLayouts();
+    const source = this.localLayout(current, id);
+    const copy = duplicateLibraryEntry(
+      `layout-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      source,
+    );
+    const layouts = insertLayout(current, copy, source.position + 1);
+    this.writeLocalLayouts(layouts);
+    return this.localLayout(layouts, copy.id);
+  }
+
+  async updateLayout(
+    id: string,
+    changes: { name?: string; layout?: unknown },
+  ): Promise<StoredLayout> {
+    const api = this.layoutBridge();
+    if (api?.update_layout) return api.update_layout(id, changes);
+    const current = this.readLocalLayouts();
+    this.localLayout(current, id);
+    const layouts = updateLibraryEntry(current, id, changes);
+    this.writeLocalLayouts(layouts);
+    return this.localLayout(layouts, id);
+  }
+
+  async resetLayout(id: string): Promise<StoredLayout> {
+    const api = this.layoutBridge();
+    if (api?.reset_layout) return api.reset_layout(id);
+    const layouts = resetLibraryEntry(this.readLocalLayouts(), id);
+    this.writeLocalLayouts(layouts);
+    return this.localLayout(layouts, id);
+  }
+
+  async deleteLayout(id: string): Promise<boolean> {
+    const api = this.layoutBridge();
+    if (api?.delete_layout) return (await api.delete_layout(id)).success;
+    const current = this.readLocalLayouts();
+    if (!current.some((layout) => layout.id === id)) return false;
+    const configs = await this.getConfigurations();
+    const result = deleteLibraryEntry(current, configs, id);
+    this.writeLocalLayouts(result.layouts);
+    localStorage.setItem(this.storageKey, JSON.stringify(result.configs));
+    return true;
+  }
+
+  // --- Data folder and forecast archive (Basic tab, system.md §8.2, §9.3) ---
+  // Both exist only with the desktop bridge; the browser fallback has
+  // neither a data folder nor an archive.
+
+  private bridgeApi() {
+    return this.isPywebviewAvailable() ? window.pywebview?.api : undefined;
+  }
+
+  async getDataDir(): Promise<DataDirInfo | null> {
+    const api = this.bridgeApi();
+    return api?.get_data_dir ? api.get_data_dir() : null;
+  }
+
+  /** Folder picked in the native dialog; null when cancelled. */
+  async chooseDataDir(): Promise<string | null> {
+    const api = this.bridgeApi();
+    return api?.choose_data_dir ? api.choose_data_dir() : null;
+  }
+
+  /** Whether the bridge can open the data folder in a file manager (#197). */
+  canOpenDataDir(): boolean {
+    return Boolean(this.bridgeApi()?.open_data_dir);
+  }
+
+  /** Opens the current data folder in the system file manager. */
+  async openDataDir(): Promise<void> {
+    const api = this.bridgeApi();
+    if (!api?.open_data_dir) {
+      throw new Error("The data folder can only be opened in the desktop app");
+    }
+    const result = await api.open_data_dir();
+    if (!result?.ok) {
+      throw new Error(result?.error || "The data folder could not be opened");
+    }
+  }
+
+  /** Creates a database with the chosen parts in `path` and switches to it. */
+  async changeDataDir(path: string, parts: DataDirCopyParts): Promise<string> {
+    const api = this.bridgeApi();
+    if (!api?.change_data_dir) {
+      throw new Error("The data folder can only be changed in the desktop app");
+    }
+    const result = await api.change_data_dir(
+      path,
+      parts.configuration,
+      parts.meteogram,
+    );
+    return result.data_dir;
+  }
+
+  async getArchiveStats(): Promise<ArchiveStats | null> {
+    const api = this.bridgeApi();
+    return api?.get_archive_stats ? api.get_archive_stats() : null;
+  }
+
+  /** Archived fetches near a location, newest first; empty without a bridge. */
+  async listArchivedForecasts(
+    location: Location,
+  ): Promise<ArchivedFetchSummary[]> {
+    const api = this.bridgeApi();
+    if (!api?.list_archived_forecasts) return [];
+    return (
+      (await api.list_archived_forecasts(
+        location.latitude,
+        location.longitude,
+      )) || []
+    );
+  }
+
+  /** One archived fetch as a forecast response (historic viewer, #144). */
+  async getHistoricForecast(fetchId: number): Promise<HistoricForecast | null> {
+    const api = this.bridgeApi();
+    return api?.get_historic_forecast ? api.get_historic_forecast(fetchId) : null;
+  }
+
+  async deleteArchive(): Promise<void> {
+    const api = this.bridgeApi();
+    if (api?.delete_archive) await api.delete_archive();
+  }
+
+  async reorderLayouts(ids: string[]): Promise<StoredLayout[]> {
+    const api = this.layoutBridge();
+    if (api?.reorder_layouts) return api.reorder_layouts(ids);
+    return this.writeLocalLayouts(reorderLibrary(this.readLocalLayouts(), ids));
+  }
+
+  private readLocalSettings(): Partial<AppSettings> {
+    try {
+      const raw = window.localStorage?.getItem(SETTINGS_STORAGE_KEY);
+      return raw ? (JSON.parse(raw) as Partial<AppSettings>) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** Stored locations, most selected first; all of them without `limit`. */
+  async getMostUsedLocations(limit?: number): Promise<Location[]> {
     try {
       if (
         this.isPywebviewAvailable() &&
         window.pywebview?.api?.get_most_used_locations
       ) {
         const locations =
-          await window.pywebview.api.get_most_used_locations(limit);
+          await window.pywebview.api.get_most_used_locations(limit ?? null);
         return locations || [];
       }
       if (typeof window !== "undefined" && window.localStorage) {
@@ -1128,43 +1579,17 @@ export function mergeForecastSegments(
   });
   const effectiveChain = activeChain.length > 0 ? activeChain : modelChain;
 
-  const failedModelNames = new Set(
-    effectiveChain
-      .filter((m) => {
-        const pts = (modelForecasts && modelForecasts[m.name]) || [];
-        return !pts.some(
-          (p) =>
-            p && p.value !== null && p.value !== undefined && !isNaN(p.value),
-        );
-      })
-      .map((m) => m.name),
-  );
-
   const lookupByModel = new Map<string, Map<number, Map<string, DataPoint>>>();
-  const validTimesByModel = new Map<string, Set<number>>();
-  const validVariablesByModel = new Map<string, Set<string>>();
   for (const model of effectiveChain) {
     const byTime = new Map<number, Map<string, DataPoint>>();
-    const validTimes = new Set<number>();
-    const validVariables = new Set<string>();
     for (const point of (modelForecasts && modelForecasts[model.name]) || []) {
       if (!point || !point.timestamp) continue;
       const timeMs = normalizeTimestamp(point.timestamp);
       const byVariable = byTime.get(timeMs) || new Map<string, DataPoint>();
       byVariable.set(point.variable, point);
       byTime.set(timeMs, byVariable);
-      if (
-        point.value !== null &&
-        point.value !== undefined &&
-        !isNaN(point.value)
-      ) {
-        validTimes.add(timeMs);
-        validVariables.add(point.variable);
-      }
     }
     lookupByModel.set(model.name, byTime);
-    validTimesByModel.set(model.name, validTimes);
-    validVariablesByModel.set(model.name, validVariables);
   }
 
   sortedTimes.forEach((tsTime) => {
@@ -1183,30 +1608,8 @@ export function mergeForecastSegments(
       }
     }
 
-    const primaryHasDataAtTs = primaryModel
-      ? (validTimesByModel.get(primaryModel.name)?.has(tsTime) ?? false)
-      : false;
-
-    if (
-      primaryModel &&
-      !primaryHasDataAtTs &&
-      !failedModelNames.has(primaryModel.name)
-    ) {
-      const activeName = primaryModel.name;
-      const primaryIdx = effectiveChain.findIndex((m) => m.name === activeName);
-      const candidates = [
-        ...effectiveChain.slice(primaryIdx + 1),
-        ...effectiveChain.slice(0, primaryIdx),
-      ];
-      for (const candidate of candidates) {
-        if (failedModelNames.has(candidate.name)) continue;
-        if (validTimesByModel.get(candidate.name)?.has(tsTime)) {
-          primaryModel = candidate;
-          break;
-        }
-      }
-    }
-
+    // Each model only ever shows its own data inside its (capped) slice;
+    // missing hours stay empty instead of borrowing another model's values.
     targetVariables.forEach((variable) => {
       let chosenPt: DataPoint | null = null;
 
@@ -1220,41 +1623,6 @@ export function mergeForecastSegments(
         !isNaN(ptInPrimary.value)
       ) {
         chosenPt = ptInPrimary;
-      }
-
-      // Check if primary model has valid data for this variable
-      const primaryHasData = primaryModel
-        ? (validVariablesByModel.get(primaryModel.name)?.has(variable) ?? false)
-        : false;
-
-      // Boundary handover fallback only if primary model has data overall
-      if (
-        !chosenPt &&
-        primaryHasData &&
-        primaryModel &&
-        ![
-          "cape",
-          "convective_inhibition",
-          "lightning_potential",
-          "weather_code",
-        ].includes(variable)
-      ) {
-        for (const fallbackModel of effectiveChain) {
-          if (fallbackModel.name === primaryModel.name) continue;
-          const fbPt = lookupByModel
-            .get(fallbackModel.name)
-            ?.get(tsTime)
-            ?.get(variable);
-          if (
-            fbPt &&
-            fbPt.value !== null &&
-            fbPt.value !== undefined &&
-            !isNaN(fbPt.value)
-          ) {
-            chosenPt = fbPt;
-            break;
-          }
-        }
       }
 
       if (!chosenPt) {
@@ -1365,6 +1733,23 @@ export function mergeVerticalCloudSegments(
     },
   );
 
+  // Open-Meteo returns null rows after the end of a model run.
+  const validProfileAt = (
+    model: WeatherModel,
+    timeMs: number,
+  ): VerticalCloudProfile | undefined => {
+    const profile =
+      profileLookupByModel.get(model.name)?.get(timeMs) ||
+      profileLookupByModel.get(model.id || model.name)?.get(timeMs);
+    return profile?.levels?.some(
+      (level) =>
+        level.cloud_cover_percent !== null &&
+        level.cloud_cover_percent !== undefined,
+    )
+      ? profile
+      : undefined;
+  };
+
   const compositeProfiles: VerticalCloudProfile[] = [];
   const transitions: VerticalCloudTransition[] = [];
   let lastModelId: string | null = null;
@@ -1382,11 +1767,11 @@ export function mergeVerticalCloudSegments(
       );
     }
 
+    const matchingProf = primaryModel
+      ? validProfileAt(primaryModel, currentDt)
+      : undefined;
     if (primaryModel) {
       const cid = primaryModel.id || primaryModel.name;
-      const matchingProf =
-        profileLookupByModel.get(primaryModel.name)?.get(currentDt) ||
-        profileLookupByModel.get(cid)?.get(currentDt);
 
       if (matchingProf) {
         compositeProfiles.push({

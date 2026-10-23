@@ -9,8 +9,8 @@ export const DEFAULT_MODEL_CHAIN: WeatherModel[] = [
 export const DEFAULT_CLOUD_MODEL: WeatherModel = {
   name: 'ECMWF IFS 0.25°',
   id: 'ecmwf_ifs025',
-  max_forecast_horizon_hours: 345,
-  max_forecast_hours: 345,
+  max_forecast_horizon_hours: 360,
+  max_forecast_hours: 360,
   spatial_resolution_km: 25.0,
   temporal_resolution_hours: 1,
   provider: 'ECMWF',
@@ -90,7 +90,7 @@ export const AVAILABLE_MODELS_METADATA: Record<string, ModelMetadata> = {
   'ECMWF IFS 0.25°': {
     name: 'ECMWF IFS 0.25°',
     id: 'ecmwf_ifs025',
-    max_forecast_horizon_hours: 345,
+    max_forecast_horizon_hours: 360,
     spatial_resolution_km: 25.0,
     temporal_resolution_hours: 1,
     provider: 'ECMWF',

@@ -51,15 +51,29 @@ export interface LocationSelectorKeyHandlerParams<T> {
   onResolveAndSelect: (term: string) => void;
   setShowDropdown: (show: boolean) => void;
   setHighlightedIndex: (index: number | ((prev: number) => number)) => void;
+  /** Alt+ArrowDown: open the most-used locations (system.md §16.5, #166). */
+  onOpenHistory?: () => void;
 }
 
 /**
- * Handles keyboard navigation (Enter, Escape, ArrowDown, ArrowUp) for LocationSelector.
+ * Handles keyboard navigation (Enter, Escape, ArrowDown, ArrowUp,
+ * Alt+ArrowDown) for LocationSelector.
  */
 export function resolveLocationSelectorKeyDown<T>(
-  e: { key: string; preventDefault: () => void; stopPropagation: () => void },
+  e: {
+    key: string;
+    altKey?: boolean;
+    preventDefault: () => void;
+    stopPropagation: () => void;
+  },
   params: LocationSelectorKeyHandlerParams<T>,
 ): void {
+  if (e.key === "ArrowDown" && e.altKey && params.onOpenHistory) {
+    e.preventDefault();
+    params.onOpenHistory();
+    return;
+  }
+
   if (e.key === "Enter") {
     e.preventDefault();
     e.stopPropagation();

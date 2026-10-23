@@ -23,6 +23,7 @@ export interface UseMeteogramHoverOptions {
   timestamps: number[];
   timeMap: Map<number, Record<string, DataPoint>>;
   precipValues: (number | null | undefined)[];
+  snowfallValues?: (number | null | undefined)[];
   resolvedTimezone: string;
   svgWidth: number;
   paddingLeft: number;
@@ -44,6 +45,7 @@ export interface UseMeteogramHoverReturn {
   hoverDateParts: { hour: string; minute: string } | null;
   popupPos: { top: number; left: number } | null;
   accumulatedPrecip: number | null;
+  accumulatedSnowfall: number | null;
   handleMouseMove: (e: MouseEvent<SVGSVGElement>) => void;
   handleMouseLeave: () => void;
   clearHover: () => void;
@@ -69,6 +71,7 @@ export function useMeteogramHover({
   timestamps,
   timeMap,
   precipValues,
+  snowfallValues,
   resolvedTimezone,
   svgWidth,
   paddingLeft,
@@ -204,6 +207,18 @@ export function useMeteogramHover({
       timestamps,
     );
   }, [hoverIndex, precipValues, timestamps]);
+  const accumulatedSnowfall = useMemo(() =>
+    calculateAccumulatedPrecipitation(
+      hoverIndex,
+      timestamps.map((_, index) =>
+        (precipValues[index] ?? 0) > 0 && (snowfallValues?.[index] ?? 0) > 0
+          ? snowfallValues![index]
+          : null,
+      ),
+      timestamps,
+    ),
+    [hoverIndex, precipValues, snowfallValues, timestamps],
+  );
 
   // Calculate popup position pinned to opposite side of cursor and below date header
   useEffect(() => {
@@ -297,6 +312,7 @@ export function useMeteogramHover({
     hoverDateParts,
     popupPos,
     accumulatedPrecip,
+    accumulatedSnowfall,
     handleMouseMove,
     handleMouseLeave,
     clearHover,

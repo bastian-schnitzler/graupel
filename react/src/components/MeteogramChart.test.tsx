@@ -2,11 +2,11 @@ import { act, render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import {
   MeteogramChart,
-  getMeteogramLayout,
-  interpolateWindDirection,
   WIND_ICON_FOOTPRINT_PX,
   WIND_ICON_RADIUS_PX,
 } from "./MeteogramChart";
+import { getMeteogramLayout } from "./drawing/meteogramLayout";
+import { interpolateWindDirection } from "../utils/meteogramWind";
 import { mergeForecastSegments } from "../services/apiService";
 import type {
   DataPoint,
@@ -90,7 +90,7 @@ describe("mergeForecastSegments Unit Tests", () => {
         {
           timestamp: ts48,
           variable: "temperature",
-          value: null as any,
+          value: null,
           unit: "°C",
           model: "ICON-D2",
         },
@@ -611,9 +611,13 @@ describe("Canonical meteogram timeline regressions", () => {
     const starts = Array.from(path.matchAll(/M ([\d.]+)/g), (match) =>
       Number(match[1]),
     );
-    expect(starts).toHaveLength(2);
+    // Start, "|" stop marker at 14:00 (15:00 is inside the model slice),
+    // restart with a "|" start marker at 16:00.
+    expect(starts).toHaveLength(4);
     expect(starts[0]).toBeCloseTo(50, 5);
-    expect(starts[1]).toBeCloseTo(50 + (2 / 3) * 900, 1);
+    expect(starts[1]).toBeCloseTo(50, 5);
+    expect(starts[2]).toBeCloseTo(50 + (2 / 3) * 900, 1);
+    expect(starts[3]).toBeCloseTo(50 + (2 / 3) * 900, 1);
   });
 });
 
@@ -1203,7 +1207,7 @@ describe("MeteogramChart Redesign Component", () => {
 
     // Terrain mask
     expect(screen.getByTestId("terrain-mask")).toBeTruthy();
-    expect(screen.getByText(/0.4 km — Zurich/)).toBeTruthy();
+    expect(screen.getByTestId("terrain-mask-label").textContent).toBe("408 m");
 
     // Vertical cloud cells
     expect(
@@ -1496,6 +1500,39 @@ describe("MeteogramChart Redesign Component", () => {
   });
 
   describe("Model Label Layout & Alignment", () => {
+    it("always shows the catalogue nickname in the header", () => {
+      const data = generateMockData(120);
+      const chain = [
+        { name: "GeoSphere AROME Austria", max_forecast_horizon_hours: 60 },
+        { name: "ICON-EU", max_forecast_horizon_hours: 120 },
+      ];
+      const availableModels = {
+        geosphere_arome_austria: {
+          id: "geosphere_arome_austria",
+          name: "GeoSphere AROME Austria",
+          short_name: "AROME AT",
+          max_forecast_horizon_hours: 60,
+        },
+      };
+      const { container } = render(
+        <MeteogramChart
+          data={data}
+          modelChain={chain}
+          availableModels={availableModels}
+        />,
+      );
+
+      const labels = Array.from(
+        container.querySelectorAll('[data-testid="model-header-label"]'),
+      );
+      expect(labels.map((label) => label.textContent)).toEqual([
+        "AROME AT",
+        "ICON-EU",
+      ]);
+      expect(labels[0].getAttribute("data-shortened")).toBe("true");
+      expect(labels[1].getAttribute("data-shortened")).toBeNull();
+    });
+
     it("renders model badges above day labels and aligns first model to X origin and subsequent models to dashed boundary lines", () => {
       const data = generateMockData(120); // 5 days, transitions at 48h (ICON-D2 -> ICON-EU) and 120h
       const { container } = render(
@@ -3109,7 +3146,8 @@ describe("MeteogramChart Redesign Component", () => {
           timelineEnd="2026-09-11T06:00:00.000Z"
         />,
       );
-      expect(getYs(container)).toEqual(initialYs);
+      // GFS covers 6h but data ends after 3h: a "|" stop marker follows.
+      expect(getYs(container).slice(0, initialYs.length)).toEqual(initialYs);
     });
 
     it("clamps out-of-range probability values to the clipped 0–100% bounds", () => {
@@ -3990,7 +4028,7 @@ describe("MeteogramChart Redesign Component", () => {
           '[data-testid="terrain-mask-label"]',
         ) as SVGTextElement;
         expect(label).toBeTruthy();
-        expect(label.textContent).toBe("0.1 km — Offenbach am Main");
+        expect(label.textContent).toBe("100 m");
 
         // svgWidth = 1000, paddingRight = 50 -> plot right edge is 950 -> label x is 950 - 4 = 946
         expect(parseFloat(label.getAttribute("x") || "0")).toBe(946);
@@ -5774,6 +5812,74 @@ describe("MeteogramChart Redesign Component", () => {
       ).toMatch(/^url\(#wind-clip-/);
     });
 
+    it("renders the location label with generation time and elevation next to the attribution", () => {
+      const data = generateMockData(24);
+      const { container } = render(
+        <MeteogramChart
+          data={data}
+          modelChain={mockModelChain}
+          location={{
+            name: "Zugspitze",
+            latitude: 47.4211,
+            longitude: 10.9853,
+            elevation: 2962,
+          }}
+          generatedAt="2026-10-16T20:45:00Z"
+          userTimezone="Europe/Berlin"
+        />,
+      );
+
+      const expected = new RegExp(
+        `^Zugspitze, 2962 m \\(${new Intl.DateTimeFormat(undefined, {
+          year: "2-digit",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "Europe/Berlin",
+        })
+          .format(new Date("2026-10-16T20:45:00Z"))
+          .replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}\\)$`,
+      );
+      const footerLabel = screen.getByTestId("meteogram-footer-location");
+      expect(footerLabel.textContent).toMatch(expected);
+      expect(footerLabel.parentElement).toBe(
+        screen.getByTestId("meteogram-footer-row"),
+      );
+      // Label, day-range buttons (#162), attribution.
+      expect(footerLabel.nextElementSibling).toBe(
+        screen.getByTestId("day-range-buttons"),
+      );
+      expect(footerLabel.nextElementSibling?.nextElementSibling).toBe(
+        screen.getByTestId("meteogram-footer-attribution"),
+      );
+
+      fireEvent.doubleClick(
+        container.querySelector(".meteogram-redesign-container") as HTMLDivElement,
+      );
+      const headerLabel = screen.getByTestId("fullscreen-header-location");
+      expect(headerLabel.textContent).toMatch(expected);
+      expect(headerLabel.nextElementSibling).toBe(
+        screen.getByTestId("fullscreen-day-range-buttons"),
+      );
+      expect(headerLabel.nextElementSibling?.nextElementSibling).toBe(
+        screen.getByTestId("fullscreen-header-attribution"),
+      );
+    });
+
+    it("labels a map-picked location with its GPS coordinates", () => {
+      render(
+        <MeteogramChart
+          data={generateMockData(24)}
+          modelChain={mockModelChain}
+          location={{ name: "Custom location", latitude: 47.4211, longitude: 10.9853 }}
+        />,
+      );
+      expect(screen.getByTestId("meteogram-footer-location").textContent).toBe(
+        "47.4211° N · 10.9853° E",
+      );
+    });
+
     it("renders Open-Meteo attribution in normal view footer and in fullscreen header", () => {
       const data = generateMockData(24);
       const { container } = render(
@@ -5800,7 +5906,9 @@ describe("MeteogramChart Redesign Component", () => {
       expect(fullscreenAttr).toBeTruthy();
       expect(fullscreenAttr.textContent).toBe("Weather data by Open-Meteo.com");
       const fullscreenChart = screen.getByTestId("fullscreen-chart-area");
-      expect(fullscreenAttr.nextElementSibling).toBe(fullscreenChart);
+      const headerRow = screen.getByTestId("fullscreen-header-row");
+      expect(fullscreenAttr.parentElement).toBe(headerRow);
+      expect(headerRow.nextElementSibling).toBe(fullscreenChart);
     });
 
     it("uses userTimezone to group days and render timeline when provided, overriding location timezone", () => {

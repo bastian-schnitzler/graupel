@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  calculateMaxWind,
   calculateTemperatureExtremes,
   calculateMaxPrecipitation,
   calculateDailyTemperatureExtremes,
@@ -91,5 +92,29 @@ describe("meteogramExtremes", () => {
       expect(extremes[0].max.text).toBe("24°C");
       expect(extremes[0].min.text).toBe("12°C");
     });
+  });
+});
+
+describe("calculateMaxWind", () => {
+  const point = (variable: string, value: number | null): DataPoint => ({
+    timestamp: "2026-09-11T00:00:00Z",
+    variable,
+    value,
+    unit: "km/h",
+    model: "ICON-EU",
+  });
+
+  it("uses speed and gusts of all models so boundary moves keep the axis", () => {
+    const forecasts = {
+      "ICON-D2": [point("wind_speed", 20), point("wind_gusts", 80)],
+      "ICON-EU": [point("wind_speed", 10), point("wind_direction", 350)],
+    };
+    // Only 20 km/h is displayed, the axis still covers the 80 km/h gust.
+    expect(calculateMaxWind(forecasts, [20])).toBe(Math.ceil(80 * 1.15));
+  });
+
+  it("keeps the 30 km/h minimum and the 50 km/h default without data", () => {
+    expect(calculateMaxWind({ A: [point("wind_speed", 5)] }, [])).toBe(30);
+    expect(calculateMaxWind(undefined, [])).toBe(50);
   });
 });

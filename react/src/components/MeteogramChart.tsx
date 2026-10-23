@@ -1,4 +1,12 @@
-import React, { useState, useMemo, useRef, useEffect, useId } from "react";
+import React, {
+  useState,
+  useMemo,
+  useRef,
+  useEffect,
+  useId,
+  useCallback,
+  useLayoutEffect,
+} from "react";
 import { createPortal } from "react-dom";
 import type {
   DataPoint,
@@ -7,6 +15,7 @@ import type {
   DetailedCloudForecast,
   VerticalCloudTransition,
   SunPeriod,
+  RunSegment,
 } from "../types";
 import {
   HOUR_MS,
@@ -19,7 +28,13 @@ import {
   uniqueSortedTimestamps,
   validateTimestampSequence,
 } from "../utils/timeline";
-import { clampTimeRange, type TimeRange } from "../utils/meteogramZoom";
+import {
+  calculateDayRange,
+  clampTimeRange,
+  findActiveDayRange,
+  type DayRangeChoice,
+  type TimeRange,
+} from "../utils/meteogramZoom";
 import {
   SEPARATOR_STROKE,
   SEPARATOR_STROKE_WIDTH,
@@ -28,16 +43,28 @@ import {
   extractWindDirectionSamples,
   buildVerticalCloudMap,
   calculateIconSlotsByMode,
-  calculateThunderstormIconsByMode,
   prepareRenderDayGroups,
 } from "./drawing/meteogramChart.logic";
-import { TemperatureArea } from "./drawing/TemperatureArea";
-import { PrecipitationCloudArea } from "./drawing/PrecipitationCloudArea";
-import { WindArea } from "./drawing/WindArea";
-import { ConvectionArea } from "./drawing/ConvectionArea";
+import { ChartArea, type ChartAreaContext } from "./drawing/ChartArea";
+import {
+  computeAreaScales,
+  computeChartGeometry,
+  type ExtremesLookup,
+} from "./drawing/chartGeometry";
+import { getCloudAltitudeY } from "./drawing/cloudProfile.logic";
 import { TimelineOverlay } from "./drawing/TimelineOverlay";
 import { ChartTooltip } from "./drawing/ChartTooltip";
 import { OpenMeteoAttribution } from "./meteogram/OpenMeteoAttribution";
+import { buildLocationLabel } from "./meteogram/locationLabel.logic";
+import { CopyPngButton } from "./meteogram/CopyPngButton";
+import { DayRangeButtons } from "./meteogram/DayRangeButtons";
+import { calculateSunTimeLabels } from "../utils/meteogramSunTimes";
+import {
+  exportLabelFontPx,
+  renderMeteogramPng,
+  type ExportTimeLine,
+} from "./meteogram/exportPng.logic";
+import { apiService } from "../services/apiService";
 import { useChartDimensions } from "./drawing/useChartDimensions";
 import { useMeteogramZoom } from "./drawing/useMeteogramZoom";
 import { useMeteogramHover } from "./drawing/useMeteogramHover";
@@ -50,33 +77,38 @@ import {
   getMeteogramLayout,
   getTextTransform,
 } from "./drawing/meteogramLayout";
+import { calculateWindIcons } from "../utils/meteogramWind";
+import { calculateDailyTemperatureExtremes } from "../utils/meteogramExtremes";
 import {
-  interpolateWindDirection,
-  calculateWindIcons,
-} from "../utils/meteogramWind";
-import {
-  calculateTemperatureExtremes,
-  calculateMaxPrecipitation,
-  calculateDailyTemperatureExtremes,
-} from "../utils/meteogramExtremes";
-import {
-  buildSvgLinePath,
-  buildPrecipitationProbabilityPath as createPrecipProbPath,
   calculateDaylightSpans,
+  calculateModelSliceEnds,
+  findCurveMarkers,
   calculateNoonPositions,
 } from "./drawing/meteogramPaths";
-import {
-  calculateConvectiveExtremes,
-  getLpiAtTimestamp,
-  buildLpiSegments,
-} from "../utils/meteogramConvective";
+import { getSupportedPointAtTimestamp } from "../utils/meteogramConvective";
 import { buildFullscreenDetailRows } from "../utils/meteogramDetails";
+import { getQuantity } from "../quantities/registry";
+import { aggregateThunderstorms } from "../utils/thunderstormIcons";
+import type { ResolvedSeries } from "../layouts/types";
+import type { ThunderstormIcon } from "./drawing/ThunderstormIconLayer";
+import {
+  POWER_DEFAULT_LAYOUT_ID,
+  resolveChartLayout,
+} from "../layouts/layoutResolution";
+import { getLayoutQuantities } from "../layouts/layoutQuantities";
+import {
+  PRECIPITATION_RAIN_SNOW,
+  withDerivedPoints,
+} from "../quantities/derivedQuantities";
+import { formatModelRunTime } from "./modelChain/modelChainBuilderUtils";
+import { chooseModelHeaderLabel } from "./drawing/modelHeaderLabel.logic";
 import {
   calculateMeteogramMaximumRange,
   groupTimestampsByDay,
   filterVisibleDayGroups,
   calculateZeroSpanModelNames,
   calculateModelSegments,
+  findRunAt,
   calculateCloudTransitionCoordinates,
 } from "../utils/meteogramTimelineUtils";
 
@@ -86,9 +118,6 @@ export {
   WIND_ICON_FOOTPRINT_PX,
   type MeteogramRenderMode,
   type MeteogramLayout,
-  getMeteogramLayout,
-  getTextTransform,
-  interpolateWindDirection,
 };
 
 interface MeteogramChartProps {
@@ -99,8 +128,16 @@ interface MeteogramChartProps {
   verticalCloudForecast?: DetailedCloudForecast | null;
   verticalCloudTransitions?: VerticalCloudTransition[];
   modelForecasts?: Record<string, DataPoint[]>;
+  /** Runs per model (newest first); headers and boundaries split per run. */
+  modelRunSegments?: Record<string, RunSegment[] | undefined>;
   maxPrecipitation?: number;
   sunPhases?: SunPeriod[];
+  /** Zoom range restored when the chart remounts without a new forecast. */
+  getPersistedVisibleRange?: () => TimeRange | null;
+  onVisibleRangeChange?: (range: TimeRange | null) => void;
+  /** Chosen day-range button (#162); applied when a new forecast loads. */
+  dayRangeChoice?: DayRangeChoice;
+  onDayRangeChoiceChange?: (days: DayRangeChoice) => void;
   forecastStartTime?: string;
   timelineStart?: string;
   timelineEnd?: string;
@@ -108,7 +145,26 @@ interface MeteogramChartProps {
   draggedCloudBoundaryHour?: number | null;
   isFullscreenMapOpen?: boolean;
   userTimezone?: string;
+  /** UTC instant the forecast was generated (shown in the location label). */
+  generatedAt?: string;
+  /**
+   * Meteogram layout (system.md §4). Missing: the fallback layout; invalid: the
+   * fallback layout plus a warning.
+   */
+  chartLayout?: unknown;
+  /** Built-in layout id used without or instead of `chartLayout`. */
+  fallbackLayoutId?: string;
+  /** Power mode (#203): model headers and boundaries whatever the layout says. */
+  forceModelHeaders?: boolean;
 }
+
+// Placeholder scale used only while the chart renders its empty state.
+const PLACEHOLDER_TIMELINE = createTimelineScale(
+  0,
+  HOUR_MS,
+  50,
+  METEOGRAM_VIEWBOX_WIDTH - 50,
+);
 
 export const MeteogramChart: React.FC<MeteogramChartProps> = ({
   data,
@@ -126,13 +182,42 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
   verticalCloudTransitions = [],
   isFullscreenMapOpen = false,
   userTimezone,
+  generatedAt,
+  modelRunSegments,
+  getPersistedVisibleRange,
+  onVisibleRangeChange,
+  dayRangeChoice,
+  onDayRangeChoiceChange,
+  chartLayout,
+  fallbackLayoutId = POWER_DEFAULT_LAYOUT_ID,
+  forceModelHeaders = false,
 }) => {
-  const [visibleRange, setVisibleRange] = useState<TimeRange | null>(null);
+  const { layout: resolvedLayout, warning: layoutWarning } = useMemo(() => {
+    const resolved = resolveChartLayout(chartLayout, fallbackLayoutId);
+    return forceModelHeaders && !resolved.layout.showModelHeaders
+      ? { ...resolved, layout: { ...resolved.layout, showModelHeaders: true } }
+      : resolved;
+  }, [chartLayout, fallbackLayoutId, forceModelHeaders]);
+  useEffect(() => {
+    if (layoutWarning) console.warn(layoutWarning);
+  }, [layoutWarning]);
+  const layoutQuantities = useMemo(
+    () => getLayoutQuantities(resolvedLayout),
+    [resolvedLayout],
+  );
+  const [visibleRange, setVisibleRange] = useState<TimeRange | null>(
+    () => getPersistedVisibleRange?.() ?? null,
+  );
+  useEffect(() => {
+    onVisibleRangeChange?.(visibleRange);
+  }, [visibleRange, onVisibleRangeChange]);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const embeddedSvgRef = useRef<SVGSVGElement>(null);
   const fullscreenSvgRef = useRef<SVGSVGElement>(null);
+  const footerRowRef = useRef<HTMLDivElement>(null);
+  const fullscreenHeaderRowRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const chartInstanceId = useId().replace(/:/g, "");
 
@@ -157,11 +242,15 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
   };
 
   useEffect(() => {
-    setNowMs(Date.now());
+    // New data: refresh the current time right after the render, then every minute.
+    const refresh = setTimeout(() => setNowMs(Date.now()), 0);
     const interval = setInterval(() => {
       setNowMs(Date.now());
     }, 60000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(refresh);
+      clearInterval(interval);
+    };
   }, [data, forecastStartTime]);
 
   const svgWidth = METEOGRAM_VIEWBOX_WIDTH;
@@ -178,8 +267,24 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
     return tz;
   }, [userTimezone, location?.timezone]);
 
+  const locationLabel = useMemo(
+    () =>
+      resolvedLayout.showLocationLabel === "none"
+        ? null
+        : buildLocationLabel(
+            location,
+            resolvedLayout.showCreatedTimestamp ? generatedAt : null,
+            resolvedTimezone,
+          ),
+    [location, generatedAt, resolvedTimezone, resolvedLayout],
+  );
+
   // Group every variable by its canonical Unix-millisecond timestamp.
-  const timeMap = useMemo(() => buildDataPointTimeMap(data), [data]);
+  // Derived quantities (system.md §5.1) join the fetched ones per hour and model.
+  const timeMap = useMemo(
+    () => buildDataPointTimeMap(withDerivedPoints(data)),
+    [data],
+  );
 
   const sourceTimestamps = useMemo(
     () => uniqueSortedTimestamps(timeMap.keys()),
@@ -216,21 +321,34 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
     ],
   );
 
+  // Chosen day-range button; App keeps it across forecasts (#162). Read
+  // when a new forecast sets the first range, not a reason to rerun.
+  const [chosenDayRange, setChosenDayRange] = useState<
+    DayRangeChoice | undefined
+  >(dayRangeChoice);
+  const dayRangeChoiceRef = useRef<DayRangeChoice | undefined>(dayRangeChoice);
+  useEffect(() => {
+    dayRangeChoiceRef.current = chosenDayRange;
+  }, [chosenDayRange]);
+
   useEffect(() => {
     if (!maximumRange) return;
     // The available domain is an external prop-derived constraint. Persisting
     // its intersection prevents an old, larger viewport from reappearing if a
-    // later configuration expands the maximum again.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // later configuration expands the maximum again. A new forecast starts
+    // with the chosen day-range button, else the whole range (#162).
     setVisibleRange((current) => {
+      const chosen = dayRangeChoiceRef.current;
       const next = current
         ? clampTimeRange(current, maximumRange)
-        : { ...maximumRange };
+        : chosen !== undefined
+          ? calculateDayRange(maximumRange, chosen, resolvedTimezone)
+          : { ...maximumRange };
       return current && current.start === next.start && current.end === next.end
         ? current
         : next;
     });
-  }, [maximumRange]);
+  }, [maximumRange, resolvedTimezone]);
 
   const effectiveVisibleRange = maximumRange
     ? visibleRange
@@ -238,7 +356,23 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
       : maximumRange
     : null;
 
-  const timeline = useMemo(() => {
+  const activeDayRange =
+    maximumRange && effectiveVisibleRange
+      ? findActiveDayRange(
+          effectiveVisibleRange,
+          maximumRange,
+          chosenDayRange,
+          resolvedTimezone,
+        )
+      : undefined;
+  const handleDayRange = (days: DayRangeChoice) => {
+    if (!maximumRange) return;
+    setVisibleRange(calculateDayRange(maximumRange, days, resolvedTimezone));
+    setChosenDayRange(days);
+    onDayRangeChoiceChange?.(days);
+  };
+
+  const resolvedTimeline = useMemo(() => {
     if (
       !effectiveVisibleRange ||
       effectiveVisibleRange.end <= effectiveVisibleRange.start
@@ -251,6 +385,9 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
       svgWidth - paddingRight,
     );
   }, [effectiveVisibleRange, paddingLeft, paddingRight, svgWidth]);
+  // Every hook below must run on every render (Rules of Hooks), so the empty
+  // state is returned only after them; a placeholder scale keeps them safe.
+  const timeline = resolvedTimeline ?? PLACEHOLDER_TIMELINE;
 
   const timestamps = useMemo(() => {
     if (!maximumRange) return sourceTimestamps;
@@ -327,15 +464,12 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
     }
   }, [forecastStartTime, modelChain, timeMap, timeline, vcloudMap]);
 
-  if (timestamps.length === 0 || !timeline) {
-    return (
-      <div className="card empty-state">
-        <p>No forecast data available for the selected parameters.</p>
-      </div>
-    );
-  }
+  const chartUnavailable = timestamps.length === 0 || !resolvedTimeline;
 
-  const getX = (timestamp: number | string) => timeline.timestampToX(timestamp);
+  const getX = useCallback(
+    (timestamp: number | string) => timeline.timestampToX(timestamp),
+    [timeline],
+  );
 
   const currentTimeX = useMemo(() => {
     if (nowMs < timeline.startMs || nowMs > timeline.endMs) return null;
@@ -359,7 +493,7 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
     );
     if (!timeline.contains(targetMs)) return null;
     return timeline.timestampToX(targetMs);
-  }, [draggedCloudBoundaryHour, forecastStartTime, timeline]);
+  }, [draggedCloudBoundaryHour, forecastStartTime, timeline, timestamps.length]);
 
   // Group timestamps by Day
   const dayGroups = useMemo(
@@ -382,90 +516,105 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
     [sunPhases, timeline],
   );
 
-  // Data values extraction
-  const tempValues = timestamps.map(
-    (ts) => timeMap.get(ts)?.["temperature"]?.value ?? null,
-  );
-  const apparentTempValues = timestamps.map(
-    (ts) => timeMap.get(ts)?.["apparent_temperature"]?.value ?? null,
-  );
-  const windValues = timestamps.map(
-    (ts) => timeMap.get(ts)?.["wind_speed"]?.value ?? null,
-  );
-  const gustValues = timestamps.map(
-    (ts) => timeMap.get(ts)?.["wind_gusts"]?.value ?? null,
+  // Values per quantity on the canonical timeline: the layout's quantities
+  // plus precipitation and snowfall for the hover sums.
+  const valuesMap = useMemo(() => {
+    const ids = new Set([...layoutQuantities, "precipitation", "snowfall"]);
+    return new Map(
+      [...ids].map((quantity) => [
+        quantity,
+        timestamps.map((ts) => {
+          const value = timeMap.get(ts)?.[quantity]?.value;
+          return typeof value === "number" && Number.isFinite(value)
+            ? value
+            : null;
+        }),
+      ]),
+    );
+  }, [timestamps, timeMap, layoutQuantities]);
+  const valuesByQuantity = (quantity: string) =>
+    valuesMap.get(quantity) ?? timestamps.map(() => null);
+  const precipValues = valuesByQuantity("precipitation");
+  const snowfallValues = valuesByQuantity("snowfall");
+
+  // Axis extremes over all data points of all models, so moving model
+  // boundaries does not shift any axis.
+  const quantityExtremes = useMemo(() => {
+    const stats = new Map<
+      string,
+      { min: number; max: number; maxPositive: number; maxAbs: number }
+    >();
+    const consider = (variable: string, value: unknown) => {
+      if (typeof value !== "number" || !Number.isFinite(value)) return;
+      const entry = stats.get(variable);
+      if (!entry) {
+        stats.set(variable, {
+          min: value,
+          max: value,
+          maxPositive: Math.max(0, value),
+          maxAbs: Math.abs(value),
+        });
+        return;
+      }
+      entry.min = Math.min(entry.min, value);
+      entry.max = Math.max(entry.max, value);
+      entry.maxPositive = Math.max(entry.maxPositive, value);
+      entry.maxAbs = Math.max(entry.maxAbs, Math.abs(value));
+    };
+    for (const points of [...Object.values(modelForecasts ?? {}), data]) {
+      if (!Array.isArray(points)) continue;
+      for (const point of withDerivedPoints(points)) {
+        if (point) consider(point.variable, point.value);
+      }
+    }
+    return stats;
+  }, [modelForecasts, data]);
+
+  const extremesOf = useMemo<ExtremesLookup>(
+    () => (quantities, transform) => {
+      // Precipitation bars use the axis maximum the view computed for them.
+      if (
+        (quantities.includes("precipitation") ||
+          quantities.includes(PRECIPITATION_RAIN_SNOW)) &&
+        typeof maxPrecipitation === "number" &&
+        maxPrecipitation >= 0
+      ) {
+        return { min: 0, max: maxPrecipitation };
+      }
+      let min: number | null = null;
+      let max: number | null = null;
+      for (const quantity of quantities) {
+        const entry = quantityExtremes.get(quantity);
+        if (!entry) continue;
+        const low = transform === "value" ? entry.min : 0;
+        const high =
+          transform === "value"
+            ? entry.max
+            : transform === "positive"
+              ? entry.maxPositive
+              : entry.maxAbs;
+        min = min === null ? low : Math.min(min, low);
+        max = max === null ? high : Math.max(max, high);
+      }
+      return { min, max };
+    },
+    [quantityExtremes, maxPrecipitation],
   );
 
-  const precipValues = timestamps.map(
-    (ts) => timeMap.get(ts)?.["precipitation"]?.value ?? null,
-  );
-  const precipProbValues = timestamps.map(
-    (ts) => timeMap.get(ts)?.["precipitation_probability"]?.value ?? null,
-  );
-
-  // Range Calculations:
-  // Temperature Y-axis minimum and maximum considering both temperature and apparent_temperature
-  // across all data points of all models in the configuration, ensuring slider resizing doesn't shift the axis.
-  const { minTemp, maxTemp } = useMemo(
+  // Ends of the model slices: a curve stopping before its slice end gets a "|".
+  const modelSliceEndsMs = useMemo(
     () =>
-      calculateTemperatureExtremes(
-        modelForecasts,
-        tempValues,
-        apparentTempValues,
+      calculateModelSliceEnds(
+        modelChain,
+        forecastStartTime
+          ? normalizeTimestamp(forecastStartTime)
+          : timeline.startMs,
       ),
-    [modelForecasts, tempValues, apparentTempValues],
+    [modelChain, forecastStartTime, timeline.startMs],
   );
-
-  const validWinds = [...windValues, ...gustValues].filter(
-    (v): v is number => v !== null,
-  );
-  const maxWind = validWinds.length
-    ? Math.max(30, Math.ceil(Math.max(...validWinds) * 1.15))
-    : 50;
-
-  const validPrecip = precipValues.filter(
-    (v): v is number => v !== null && v >= 0,
-  );
-
-  // Precipitation maximum across all data of all models, so moving boundaries doesn't shift the Y-axis
-  const rawMaxPrecip = useMemo(
-    () =>
-      calculateMaxPrecipitation(maxPrecipitation, modelForecasts, validPrecip),
-    [maxPrecipitation, modelForecasts, validPrecip],
-  );
-
-  const precipAxisMax = rawMaxPrecip > 0 ? rawMaxPrecip / 0.8 : 2.5;
-
-  // Path Builder with gap handling for missing data
-  const buildPath = (
-    values: (number | null)[],
-    minY: number,
-    maxY: number,
-    panelTop: number,
-    panelHeight: number,
-    paddingTop = 10,
-    paddingBottom = 10,
-  ) =>
-    buildSvgLinePath(
-      values,
-      minY,
-      maxY,
-      panelTop,
-      panelHeight,
-      timestamps,
-      getX,
-      paddingTop,
-      paddingBottom,
-    );
-
-  const buildPrecipitationProbabilityPath = () =>
-    createPrecipProbPath(
-      precipProbValues,
-      timestamps,
-      combinedPlotBottom,
-      combinedPlotHeight,
-      getX,
-    );
+  // A curve resuming after a gap gets a "|" at its first point.
+  const getCurveMarkers = (values: (number | null)[]) =>
+    findCurveMarkers(values, timestamps, modelSliceEndsMs);
 
   // Noon grid lines (12:00 local time per day) calculated from actual time scale
   const noonPositions = useMemo(
@@ -479,97 +628,124 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
     [visibleDayGroups, timestamps, resolvedTimezone, timeline],
   );
 
-  // Panel Heights & Layout
-  const modelHeaderTop = 0;
-  const modelHeaderHeight = 22;
-  const modelHeaderBoxTop = modelHeaderTop + 2;
-  const modelHeaderBoxHeight = 18;
-  const modelHeaderBoxBottom = modelHeaderBoxTop + modelHeaderBoxHeight;
-
-  const dayHeaderTop = modelHeaderTop + modelHeaderHeight;
-  const dayHeaderHeight = 22;
-  const dayHeaderBottom = dayHeaderTop + dayHeaderHeight; // 44
-
-  const tempTop = dayHeaderBottom; // 44
-  const tempHeight = 115;
-  const tempBottom = tempTop + tempHeight; // 159
-
-  // White Separator Height: approx 2/3 of date header height (22 * 2/3 = 14.67 -> 15px)
-  const separatorHeight = Math.round((2 / 3) * dayHeaderHeight); // 15
-
-  // Combined Panel: Detailed Clouds, Precipitation & Probability
+  // Panel geometry from the layout (header, day header, areas, gaps).
   const hasDetailedCloud = Boolean(
     verticalCloudForecast &&
     verticalCloudForecast.profiles &&
     verticalCloudForecast.profiles.length > 0,
   );
-
-  const combinedPlotTop = tempBottom + separatorHeight; // 174
-  const combinedPlotHeight = hasDetailedCloud ? 125 : 95;
-  const combinedPlotBottom = combinedPlotTop + combinedPlotHeight; // 299 (or 269)
-
-  // Panel 3: Wind speed, gusts & direction
-  const windTop = combinedPlotBottom + separatorHeight; // 314 (or 284)
-  const windHeight = 105;
-  const windBottom = windTop + windHeight; // 419 (or 389)
-
-  const convectiveTop = windBottom + separatorHeight;
-  const convectiveHalfHeight = 65;
-  const convectiveZero = convectiveTop + convectiveHalfHeight;
-  const convectiveBottom = convectiveZero + convectiveHalfHeight;
-  const totalSvgHeight = convectiveBottom + 10;
-
-  const convectiveValues = (variable: string) =>
-    timestamps.map((ts) => {
-      const value = timeMap.get(ts)?.[variable]?.value;
-      return typeof value === "number" && Number.isFinite(value) ? value : null;
-    });
-  const capeValues = convectiveValues("cape");
-  const cinValues = convectiveValues("convective_inhibition");
-  const { capeMax, cinMax } = useMemo(
-    () => calculateConvectiveExtremes(modelForecasts, data),
-    [modelForecasts, data],
+  const geometry = useMemo(
+    () =>
+      computeChartGeometry(resolvedLayout, {
+        backgroundHasData: hasDetailedCloud,
+      }),
+    [resolvedLayout, hasDetailedCloud],
+  );
+  const {
+    modelHeaderTop,
+    modelHeaderBoxTop,
+    modelHeaderBoxHeight,
+    modelHeaderBoxBottom,
+    dayHeaderTop,
+    dayHeaderHeight,
+    dayHeaderBottom,
+    plotBottom,
+  } = geometry;
+  const areaScales = useMemo(
+    () => geometry.areas.map((area) => computeAreaScales(area, extremesOf)),
+    [geometry, extremesOf],
   );
 
-  const lpiAt = (ts: number) =>
-    getLpiAtTimestamp(ts, timeMap, modelChain, availableModels);
+  // The copied PNG shows the red time line at the generation time printed in
+  // the location label, not at the moment of copying.
+  const exportTimeLine = useMemo<ExportTimeLine>(() => {
+    const generatedMs = generatedAt ? normalizeTimestamp(generatedAt) : NaN;
+    const lineMs = Number.isFinite(generatedMs) ? generatedMs : nowMs;
+    const inRange = lineMs >= timeline.startMs && lineMs <= timeline.endMs;
+    return {
+      x: inRange ? timeline.timestampToX(lineMs) : null,
+      y1: dayHeaderTop,
+      y2: plotBottom,
+      timestamp: canonicalTimestamp(lineMs),
+    };
+  }, [generatedAt, nowMs, timeline, dayHeaderTop, plotBottom]);
 
-  const lpiSegments = useMemo(
-    () =>
-      buildLpiSegments(
-        timestamps,
-        timeMap,
-        modelChain,
-        availableModels,
-        convectiveZero,
-        convectiveHalfHeight,
-        getX,
-        timeline.endMs,
-      ),
-    [
-      timestamps,
+  const copyChartPng = (mode: MeteogramRenderMode) => {
+    const svg =
+      mode === "fullscreen" ? fullscreenSvgRef.current : embeddedSvgRef.current;
+    const row =
+      mode === "fullscreen"
+        ? fullscreenHeaderRowRef.current
+        : footerRowRef.current;
+    if (!svg) return Promise.resolve(false);
+    return apiService.copyPngToClipboard(
+      renderMeteogramPng({
+        svg,
+        textRows: row ? [row] : [],
+        timeLine: exportTimeLine,
+        labelFontPx: exportLabelFontPx(svg),
+      }),
+    );
+  };
+  const totalSvgHeight = geometry.totalHeight;
+
+  const lpiAt = (ts: number) =>
+    getSupportedPointAtTimestamp(
+      "lightning_potential",
+      ts,
       timeMap,
       modelChain,
       availableModels,
-      convectiveZero,
-      convectiveHalfHeight,
-      getX,
-      timeline.endMs,
-    ],
-  );
+    );
+
+  const heldPointAt = (quantity: string, ts: number) => {
+    const definition = getQuantity(quantity);
+    if (definition?.optional && definition.catalogued) {
+      return getSupportedPointAtTimestamp(
+        quantity,
+        ts,
+        timeMap,
+        modelChain,
+        availableModels,
+      );
+    }
+    const point = timeMap.get(ts)?.[quantity];
+    return point ?? null;
+  };
+
+  // Icon footprints in use (arrows and icons series share slots per
+  // footprint, so wind and thunderstorm icons line up by default).
+  const iconFootprints = useMemo(() => {
+    const footprints = new Set<number>();
+    for (const area of resolvedLayout.areas) {
+      for (const series of area.series) {
+        if (series.style === "arrows" || series.style === "icons") {
+          footprints.add(series.iconFootprintPx ?? WIND_ICON_FOOTPRINT_PX);
+        }
+      }
+    }
+    return [...footprints];
+  }, [resolvedLayout]);
 
   // Share slots even when wind observations are unavailable.
-  const iconSlotsByMode = useMemo(
+  const iconSlotsByFootprint = useMemo(
     () =>
-      calculateIconSlotsByMode({
-        dayGroups,
-        timestamps,
-        timeline,
-        embeddedWidth: embeddedDimensions.width,
-        fullscreenWidth: fullscreenDimensions.width,
-        svgWidth,
-      }),
+      new Map(
+        iconFootprints.map((footprintPx) => [
+          footprintPx,
+          calculateIconSlotsByMode({
+            dayGroups,
+            timestamps,
+            timeline,
+            embeddedWidth: embeddedDimensions.width,
+            fullscreenWidth: fullscreenDimensions.width,
+            svgWidth,
+            footprintPx,
+          }),
+        ]),
+      ),
     [
+      iconFootprints,
       dayGroups,
       timestamps,
       embeddedDimensions.width,
@@ -579,26 +755,56 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
     ],
   );
 
-  const windIconsByMode = useMemo(
-    () => ({
-      embedded: calculateWindIcons(
-        iconSlotsByMode.embedded,
-        windDirectionSamples,
-        getX,
-      ),
-      fullscreen: calculateWindIcons(
-        iconSlotsByMode.fullscreen,
-        windDirectionSamples,
-        getX,
-      ),
-    }),
-    [iconSlotsByMode, windDirectionSamples, getX],
-  );
-
-  const thunderstormIconsByMode = useMemo(
-    () => calculateThunderstormIconsByMode(iconSlotsByMode, data),
-    [iconSlotsByMode, data],
-  );
+  // Icons per arrows / icons series and render mode.
+  const windIconsBySeries = useMemo(() => {
+    const result = new Map<
+      ResolvedSeries,
+      Record<MeteogramRenderMode, ReturnType<typeof calculateWindIcons>>
+    >();
+    for (const area of resolvedLayout.areas) {
+      for (const series of area.series) {
+        if (series.style !== "arrows") continue;
+        const slots = iconSlotsByFootprint.get(
+          series.iconFootprintPx ?? WIND_ICON_FOOTPRINT_PX,
+        );
+        const samples =
+          series.quantity === "wind_direction"
+            ? windDirectionSamples
+            : extractWindDirectionSamples(timestamps, timeMap, series.quantity);
+        result.set(series, {
+          embedded: calculateWindIcons(slots?.embedded ?? [], samples, getX),
+          fullscreen: calculateWindIcons(slots?.fullscreen ?? [], samples, getX),
+        });
+      }
+    }
+    return result;
+  }, [
+    resolvedLayout,
+    iconSlotsByFootprint,
+    windDirectionSamples,
+    timestamps,
+    timeMap,
+    getX,
+  ]);
+  const thunderstormIconsBySeries = useMemo(() => {
+    const result = new Map<
+      ResolvedSeries,
+      Record<MeteogramRenderMode, ThunderstormIcon[]>
+    >();
+    for (const area of resolvedLayout.areas) {
+      for (const series of area.series) {
+        if (series.style !== "icons") continue;
+        const slots = iconSlotsByFootprint.get(
+          series.iconFootprintPx ?? WIND_ICON_FOOTPRINT_PX,
+        );
+        result.set(series, {
+          embedded: aggregateThunderstorms(slots?.embedded ?? [], data),
+          fullscreen: aggregateThunderstorms(slots?.fullscreen ?? [], data),
+        });
+      }
+    }
+    return result;
+  }, [resolvedLayout, iconSlotsByFootprint, data]);
 
   const {
     hoverTime,
@@ -609,6 +815,7 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
     hoverDateParts,
     popupPos,
     accumulatedPrecip,
+    accumulatedSnowfall,
     handleMouseMove,
     handleMouseLeave,
     hidePopupOnZoom,
@@ -616,10 +823,11 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
   } = useMeteogramHover({
     containerRef,
     popupRef,
-    timeline,
+    timeline: chartUnavailable ? null : timeline,
     timestamps,
     timeMap,
     precipValues,
+    snowfallValues,
     resolvedTimezone,
     svgWidth,
     paddingLeft,
@@ -631,11 +839,31 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
   });
 
   const hoverTimeRef = useRef<number | null>(null);
-  hoverTimeRef.current = hoverTime;
+  useLayoutEffect(() => {
+    hoverTimeRef.current = hoverTime;
+  }, [hoverTime]);
+
+  // Popup: run start and length of the run delivering the hovered value.
+  const hoverModelName =
+    hoverData?.["temperature"]?.model || hoverData?.["wind_speed"]?.model;
+  const hoverRun =
+    hoverModelName && hoverTimestamp
+      ? findRunAt(modelRunSegments?.[hoverModelName], hoverTimestamp)
+      : undefined;
+  const hoverRunTime = formatModelRunTime(
+    hoverRun?.run_init_time,
+    resolvedTimezone,
+  );
+  const hoverRunInfo = hoverRunTime
+    ? `Run ${hoverRunTime}` +
+      (typeof hoverRun?.run_length_hours === "number"
+        ? ` + ${hoverRun.run_length_hours}h`
+        : "")
+    : null;
 
   useMeteogramZoom({
     maximumRange,
-    timeline,
+    timeline: chartUnavailable ? null : timeline,
     hoverTimeRef,
     isFullscreen,
     embeddedSvgRef,
@@ -657,8 +885,15 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
 
   // Model segments calculation for header row
   const modelSegments = useMemo(
-    () => calculateModelSegments(modelChain, forecastStartTime, timeline),
-    [modelChain, forecastStartTime, timeline],
+    () =>
+      calculateModelSegments(
+        modelChain,
+        forecastStartTime,
+        timeline,
+        modelRunSegments,
+        availableModels,
+      ),
+    [modelChain, forecastStartTime, timeline, modelRunSegments, availableModels],
   );
 
   const cloudTransitionXs = useMemo(
@@ -667,55 +902,49 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
     [verticalCloudTransitions, timeline],
   );
 
-  // Local Ground Elevation calculation (in km ASL)
+  // Local ground elevation (km ASL) for the cloud profile terrain mask.
   const locElevationMeters = location?.elevation ?? 0;
   const locElevationKm = Math.max(0, locElevationMeters / 1000.0);
-  const maxAltitudeKm = 12.0;
 
-  const getAltitudeY = (altKm: number) => {
-    const usableHeight = combinedPlotHeight - 10;
-    const clampedAlt = Math.max(0, Math.min(maxAltitudeKm, altKm));
-    return (
-      combinedPlotTop +
-      combinedPlotHeight -
-      (clampedAlt / maxAltitudeKm) * usableHeight
+  const terrainMask = useMemo(() => {
+    const area = geometry.areas.find(
+      (item) => item.hasBackground && item.area.background?.terrainMask,
     );
-  };
+    if (!area || !area.area.background) return null;
+    return {
+      groundY: getCloudAltitudeY(
+        area,
+        area.area.background.maxAltitudeKm,
+        locElevationKm,
+      ),
+      bottom: area.bottom,
+      elevationKm: locElevationKm,
+    };
+  }, [geometry, locElevationKm]);
 
-  const groundY = getAltitudeY(locElevationKm);
-
-  // Daily min and max temperature calculations (real temperature only)
-  const dailyExtremes = useMemo(
-    () =>
-      calculateDailyTemperatureExtremes({
-        dayGroups,
-        timestamps,
-        tempValues,
-        minTemp,
-        maxTemp,
-        tempHeight,
-        tempTop,
-        paddingLeft,
-        paddingRight,
-        svgWidth,
-        timeline,
-        getX,
-      }),
-    [
+  // Daily min and max labels of a line series (real temperature only in the
+  // built-in layouts).
+  const dailyExtremesOf: ChartAreaContext["dailyExtremesOf"] = (
+    series,
+    scale,
+  ) =>
+    calculateDailyTemperatureExtremes({
       dayGroups,
-      tempValues,
-      minTemp,
-      maxTemp,
-      tempHeight,
-      tempTop,
+      timestamps,
+      tempValues: valuesByQuantity(series.quantity),
+      minTemp: scale.min,
+      maxTemp: scale.max,
+      tempHeight: scale.bottom - scale.top,
+      tempTop: scale.top,
       paddingLeft,
       paddingRight,
       svgWidth,
-      timestamps,
       timeline,
       getX,
-    ],
-  );
+      paddingTop: scale.paddingTop,
+      paddingBottom: scale.paddingBottom,
+      unit: getQuantity(series.quantity)?.unit ?? "",
+    });
 
   const detailRows = useMemo(
     () =>
@@ -724,24 +953,68 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
         hoverData,
         accumulatedPrecip,
         resolvedTimezone,
+        quantities: layoutQuantities,
       }),
-    [hoverTimestamp, hoverData, accumulatedPrecip, resolvedTimezone],
+    [
+      hoverTimestamp,
+      hoverData,
+      accumulatedPrecip,
+      resolvedTimezone,
+      layoutQuantities,
+    ],
   );
 
+  const overlayAreas = geometry.areas.map(({ name, top, bottom }) => ({
+    name,
+    top,
+    bottom,
+  }));
+
   const renderSvgContent = (instance: MeteogramRenderMode) => {
-    const layout = getMeteogramLayout({
+    const pixelLayout = getMeteogramLayout({
       mode: instance,
       ...(instance === "embedded" ? embeddedDimensions : fullscreenDimensions),
       viewBoxHeight: totalSvgHeight,
     });
-    const windIcons = windIconsByMode[instance] || [];
-    const temperatureClipId = `temperature-clip-${chartInstanceId}-${instance}`;
-    const combinedClipId = `combined-clip-${chartInstanceId}-${instance}`;
-    const windClipId = `wind-clip-${chartInstanceId}-${instance}`;
-    const probabilityClipId = `precipitation-probability-clip-${chartInstanceId}-${instance}`;
-    const convectiveClipId = `convective-clip-${chartInstanceId}-${instance}`;
-    const lpiClipId = `lpi-clip-${chartInstanceId}-${instance}`;
     const temperatureGradientId = `temperature-gradient-${chartInstanceId}-${instance}`;
+    const areaContext: ChartAreaContext = {
+      chartId: chartInstanceId,
+      instance,
+      pixelLayout,
+      paddingLeft,
+      paddingRight,
+      svgWidth,
+      outerLeftX,
+      outerRightX,
+      graphWidth,
+      timestamps,
+      timeline,
+      getX,
+      valuesOf: valuesByQuantity,
+      curveMarkersOf: getCurveMarkers,
+      heldPointAt,
+      dailyExtremesOf,
+      sunTimeLabelsOf: (geometry, textScaleX) =>
+        calculateSunTimeLabels({
+          sunPhases,
+          startMs: timeline.startMs,
+          endMs: timeline.endMs,
+          timeZone: resolvedTimezone,
+          getX: (ts) => getX(ts),
+          top: geometry.top,
+          bottom: geometry.bottom,
+          textScaleX,
+        }),
+      windIconsOf: (series) => windIconsBySeries.get(series)?.[instance] ?? [],
+      thunderstormIconsOf: (series) =>
+        thunderstormIconsBySeries.get(series)?.[instance] ?? [],
+      vcloudMap,
+      draggedCloudX,
+      cloudTransitionXs,
+      separatorStroke: SEPARATOR_STROKE,
+      separatorStrokeWidth: SEPARATOR_STROKE_WIDTH,
+      separatorOpacity: SEPARATOR_OPACITY,
+    };
 
     return (
       <>
@@ -756,169 +1029,99 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
             <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.25" />
             <stop offset="100%" stopColor="#f43f5e" stopOpacity="0.0" />
           </linearGradient>
-          <clipPath id={temperatureClipId}>
-            <rect
-              x={outerLeftX}
-              y={tempTop}
-              width={graphWidth}
-              height={tempHeight}
-            />
-          </clipPath>
-          <clipPath id={combinedClipId}>
-            <rect
-              x={outerLeftX}
-              y={combinedPlotTop}
-              width={graphWidth}
-              height={combinedPlotHeight}
-            />
-          </clipPath>
-          <clipPath id={probabilityClipId}>
-            <rect
-              x={outerLeftX}
-              y={combinedPlotTop}
-              width={graphWidth}
-              height={combinedPlotHeight}
-            />
-          </clipPath>
-          <clipPath id={windClipId}>
-            <rect
-              x={outerLeftX}
-              y={windTop}
-              width={graphWidth}
-              height={windHeight}
-            />
-          </clipPath>
-          <clipPath id={convectiveClipId}>
-            <rect
-              x={outerLeftX}
-              y={convectiveTop}
-              width={graphWidth}
-              height={convectiveHalfHeight * 2}
-            />
-          </clipPath>
-          <clipPath id={lpiClipId}>
-            <rect
-              x={outerLeftX}
-              y={convectiveTop}
-              width={graphWidth}
-              height={convectiveHalfHeight}
-            />
-          </clipPath>
         </defs>
 
         {/* Model Segments Row (Above Day Labels) */}
-        {modelSegments.map((seg, idx) => {
-          if (zeroSpanModelNames.has(seg.modelName.toLowerCase())) return null;
-          const spanWidth = seg.endX - seg.startX;
-          if (spanWidth <= 0) return null;
-          const badgeX = seg.startX;
-          const badgeWidth = spanWidth;
-          const badgeY = modelHeaderBoxTop;
-          const badgeHeight = modelHeaderBoxHeight;
-          const badgeBottom = modelHeaderBoxBottom;
-          const cornerRadius = Math.min(3, badgeWidth / 2, badgeHeight);
-          const badgePath = [
-            `M ${badgeX} ${badgeBottom}`,
-            `V ${badgeY + cornerRadius}`,
-            `Q ${badgeX} ${badgeY} ${badgeX + cornerRadius} ${badgeY}`,
-            `H ${badgeX + badgeWidth - cornerRadius}`,
-            `Q ${badgeX + badgeWidth} ${badgeY} ${badgeX + badgeWidth} ${badgeY + cornerRadius}`,
-            `V ${badgeBottom}`,
-            "Z",
-          ].join(" ");
+        {resolvedLayout.showModelHeaders &&
+          modelSegments.map((seg, idx) => {
+            if (zeroSpanModelNames.has(seg.modelName.toLowerCase()))
+              return null;
+            const spanWidth = seg.endX - seg.startX;
+            if (spanWidth <= 0) return null;
+            const badgeX = seg.startX;
+            const badgeWidth = spanWidth;
+            const badgeY = modelHeaderBoxTop;
+            const badgeHeight = modelHeaderBoxHeight;
+            const badgeBottom = modelHeaderBoxBottom;
+            const headerLabel = chooseModelHeaderLabel(
+              seg.label,
+              seg.shortLabel,
+              badgeWidth,
+            );
+            const cornerRadius = Math.min(3, badgeWidth / 2, badgeHeight);
+            const badgePath = [
+              `M ${badgeX} ${badgeBottom}`,
+              `V ${badgeY + cornerRadius}`,
+              `Q ${badgeX} ${badgeY} ${badgeX + cornerRadius} ${badgeY}`,
+              `H ${badgeX + badgeWidth - cornerRadius}`,
+              `Q ${badgeX + badgeWidth} ${badgeY} ${badgeX + badgeWidth} ${badgeY + cornerRadius}`,
+              `V ${badgeBottom}`,
+              "Z",
+            ].join(" ");
 
-          return (
-            <g
-              key={`model-seg-${idx}-${seg.modelName}`}
-              className="model-label-segment"
-              data-testid="model-label-segment"
-              data-model={seg.modelName}
-              data-start-x={seg.startX}
-              data-end-x={seg.endX}
-            >
-              <path
-                d={badgePath}
-                fill="#f59e0b"
-                data-testid="model-header-shape"
-                data-x={badgeX}
-                data-y={badgeY}
-                data-width={badgeWidth}
-                data-height={badgeHeight}
-                data-top-radius={cornerRadius}
-                data-bottom-radius="0"
-              />
-              <text
-                x={badgeX + badgeWidth / 2}
-                y={modelHeaderTop + 14}
-                transform={getTextTransform(
-                  badgeX + badgeWidth / 2,
-                  modelHeaderTop + 14,
-                  layout.textScaleX,
-                )}
-                fill="#0f172a"
-                fontSize={
-                  badgeWidth < 40 ? "7" : badgeWidth < 70 ? "8.5" : "10"
-                }
-                fontWeight="800"
-                textAnchor="middle"
+            return (
+              <g
+                key={`model-seg-${idx}-${seg.label}`}
+                className="model-label-segment"
+                data-testid="model-label-segment"
+                data-model={seg.modelName}
+                data-start-x={seg.startX}
+                data-end-x={seg.endX}
               >
-                {seg.modelName}
-              </text>
-            </g>
-          );
-        })}
+                <path
+                  d={badgePath}
+                  fill="#f59e0b"
+                  data-testid="model-header-shape"
+                  data-x={badgeX}
+                  data-y={badgeY}
+                  data-width={badgeWidth}
+                  data-height={badgeHeight}
+                  data-top-radius={cornerRadius}
+                  data-bottom-radius="0"
+                />
+                <text
+                  x={badgeX + badgeWidth / 2}
+                  y={modelHeaderTop + 14}
+                  transform={getTextTransform(
+                    badgeX + badgeWidth / 2,
+                    modelHeaderTop + 14,
+                    pixelLayout.textScaleX,
+                  )}
+                  fill="#0f172a"
+                  fontSize={headerLabel.fontSize}
+                  fontWeight="800"
+                  textAnchor="middle"
+                  data-testid="model-header-label"
+                  data-shortened={headerLabel.shortened ? "true" : undefined}
+                >
+                  {headerLabel.text}
+                </text>
+              </g>
+            );
+          })}
 
-        {/* Daylight Stripes (Sunrise to Sunset) */}
-        {daylightSpans.map((span, idx) => (
-          <g
-            key={`daylight-stripe-${span.dayKey || idx}`}
-            className="daylight-stripe-group"
-          >
-            {/* Area 1: Temperature area */}
-            <rect
-              x={span.x}
-              y={dayHeaderBottom}
-              width={span.width}
-              height={tempBottom - dayHeaderBottom}
-              fill="#fef08a"
-              opacity="0.45"
-              pointerEvents="none"
-              data-testid="daylight-stripe"
-            />
-            {/* Area 2: Precipitation / cloud area */}
-            <rect
-              x={span.x}
-              y={combinedPlotTop}
-              width={span.width}
-              height={combinedPlotHeight}
-              fill="#fef08a"
-              opacity="0.45"
-              pointerEvents="none"
-              data-testid="daylight-stripe"
-            />
-            {/* Area 3: Wind area */}
-            <rect
-              x={span.x}
-              y={windTop}
-              width={span.width}
-              height={windHeight}
-              fill="#fef08a"
-              opacity="0.45"
-              pointerEvents="none"
-              data-testid="daylight-stripe"
-            />
-            <rect
-              x={span.x}
-              y={convectiveTop}
-              width={span.width}
-              height={convectiveHalfHeight * 2}
-              fill="#fef08a"
-              opacity="0.45"
-              pointerEvents="none"
-              data-testid="daylight-stripe"
-            />
-          </g>
-        ))}
+        {/* Daylight Stripes (Sunrise to Sunset), one rect per area */}
+        {resolvedLayout.showDaylight &&
+          daylightSpans.map((span, idx) => (
+            <g
+              key={`daylight-stripe-${span.dayKey || idx}`}
+              className="daylight-stripe-group"
+            >
+              {geometry.areas.map((area) => (
+                <rect
+                  key={area.name}
+                  x={span.x}
+                  y={area.top}
+                  width={span.width}
+                  height={area.height}
+                  fill="#fef08a"
+                  opacity="0.45"
+                  pointerEvents="none"
+                  data-testid="daylight-stripe"
+                />
+              ))}
+            </g>
+          ))}
 
         <TimelineOverlay
           dayGroups={prepareRenderDayGroups({
@@ -935,147 +1138,33 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
           dayHeaderTop={dayHeaderTop}
           dayHeaderBottom={dayHeaderBottom}
           dayHeaderHeight={dayHeaderHeight}
-          tempBottom={tempBottom}
-          combinedPlotTop={combinedPlotTop}
-          combinedPlotBottom={combinedPlotBottom}
-          combinedPlotHeight={combinedPlotHeight}
-          windTop={windTop}
-          windBottom={windBottom}
-          windHeight={windHeight}
-          convectiveTop={convectiveTop}
-          convectiveBottom={convectiveBottom}
-          convectiveHalfHeight={convectiveHalfHeight}
+          areas={overlayAreas}
           outerLeftX={outerLeftX}
           outerRightX={outerRightX}
           paddingLeft={paddingLeft}
           paddingRight={paddingRight}
           svgWidth={svgWidth}
           modelHeaderBoxBottom={modelHeaderBoxBottom}
-          hasDetailedCloud={hasDetailedCloud}
-          locElevationKm={locElevationKm}
-          groundY={groundY}
+          showModelBoundaries={resolvedLayout.showModelHeaders}
+          showDayHeader={resolvedLayout.showDayHeader}
+          terrainMask={terrainMask}
           graphWidth={graphWidth}
-          locationName={location?.name}
           timeline={timeline}
           separatorStroke={SEPARATOR_STROKE}
           separatorStrokeWidth={SEPARATOR_STROKE_WIDTH}
           separatorOpacity={SEPARATOR_OPACITY}
-          textScaleX={layout.textScaleX}
+          textScaleX={pixelLayout.textScaleX}
         />
 
-        {/* PANEL 1: TEMPERATURE & WEATHER ICONS */}
-        <TemperatureArea
-          paddingLeft={paddingLeft}
-          paddingRight={paddingRight}
-          svgWidth={svgWidth}
-          tempTop={tempTop}
-          tempHeight={tempHeight}
-          minTemp={minTemp}
-          maxTemp={maxTemp}
-          temperatureClipId={temperatureClipId}
-          apparentTempPath={buildPath(
-            apparentTempValues,
-            minTemp,
-            maxTemp,
-            tempTop,
-            tempHeight,
-            22,
-            10,
-          )}
-          tempPath={buildPath(
-            tempValues,
-            minTemp,
-            maxTemp,
-            tempTop,
-            tempHeight,
-            22,
-            10,
-          )}
-          dailyExtremes={dailyExtremes}
-          separatorStroke={SEPARATOR_STROKE}
-          separatorStrokeWidth={SEPARATOR_STROKE_WIDTH}
-          separatorOpacity={SEPARATOR_OPACITY}
-          textScaleX={layout.textScaleX}
-        />
-
-        {/* COMBINED PANEL: DETAILED CLOUDS, PRECIPITATION & PRECIPITATION PROBABILITY */}
-        <PrecipitationCloudArea
-          paddingLeft={paddingLeft}
-          paddingRight={paddingRight}
-          svgWidth={svgWidth}
-          combinedPlotTop={combinedPlotTop}
-          combinedPlotHeight={combinedPlotHeight}
-          combinedPlotBottom={combinedPlotBottom}
-          hasDetailedCloud={hasDetailedCloud}
-          maxAltitudeKm={maxAltitudeKm}
-          combinedClipId={combinedClipId}
-          probabilityClipId={probabilityClipId}
-          timestamps={timestamps}
-          timeline={timeline}
-          vcloudMap={vcloudMap}
-          getAltitudeY={getAltitudeY}
-          draggedCloudX={draggedCloudX}
-          cloudTransitionXs={cloudTransitionXs}
-          precipValues={precipValues}
-          precipAxisMax={precipAxisMax}
-          precipitationProbabilityPath={buildPrecipitationProbabilityPath()}
-          thunderstormIcons={thunderstormIconsByMode[instance]}
-          layout={layout}
-          instance={instance}
-          getX={getX}
-        />
-
-        {/* PANEL 4: WIND SPEED, GUSTS & WIND DIRECTION */}
-        <WindArea
-          paddingLeft={paddingLeft}
-          windTop={windTop}
-          windHeight={windHeight}
-          windBottom={windBottom}
-          maxWind={maxWind}
-          windClipId={windClipId}
-          windSpeedPath={buildPath(
-            windValues,
-            0,
-            maxWind,
-            windTop,
-            windHeight,
-            25,
-            0,
-          )}
-          windGustsPath={buildPath(
-            gustValues,
-            0,
-            maxWind,
-            windTop,
-            windHeight,
-            25,
-            0,
-          )}
-          windIcons={windIcons}
-          layout={layout}
-          instance={instance}
-        />
-
-        {/* PANEL 5: CONVECTIVE */}
-        <ConvectionArea
-          paddingLeft={paddingLeft}
-          outerLeftX={outerLeftX}
-          outerRightX={outerRightX}
-          convectiveTop={convectiveTop}
-          convectiveZero={convectiveZero}
-          convectiveBottom={convectiveBottom}
-          convectiveHalfHeight={convectiveHalfHeight}
-          capeMax={capeMax}
-          cinMax={cinMax}
-          convectiveClipId={convectiveClipId}
-          lpiClipId={lpiClipId}
-          timestamps={timestamps}
-          timeline={timeline}
-          capeValues={capeValues}
-          cinValues={cinValues}
-          lpiSegments={lpiSegments}
-          textScaleX={layout.textScaleX}
-        />
+        {/* DRAWING AREAS (layout order) */}
+        {geometry.areas.map((area, index) => (
+          <ChartArea
+            key={area.area.id}
+            geometry={area}
+            scales={areaScales[index]}
+            context={areaContext}
+          />
+        ))}
 
         {/* HOVER OR CURRENT-TIME CROSSHAIR */}
         {hoverX !== null ? (
@@ -1087,7 +1176,7 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
               x1={hoverX}
               y1={dayHeaderTop}
               x2={hoverX}
-              y2={convectiveBottom}
+              y2={plotBottom}
               stroke="#f43f5e"
               strokeWidth="1.2"
               strokeDasharray="4 2"
@@ -1111,7 +1200,7 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
               x1={currentTimeX}
               y1={dayHeaderTop}
               x2={currentTimeX}
-              y2={convectiveBottom}
+              y2={plotBottom}
               stroke="#f43f5e"
               strokeWidth="1.2"
               strokeDasharray="4 2"
@@ -1124,6 +1213,40 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
     );
   };
 
+  // Location label and attribution; above or below the embedded chart.
+  const footerRow = (
+    <div
+      ref={footerRowRef}
+      className={`meteogram-footer-row${resolvedLayout.showLocationLabel === "top" ? " meteogram-footer-row--top" : ""}`}
+      data-testid="meteogram-footer-row"
+    >
+      <span
+        className="meteogram-location-label"
+        data-testid="meteogram-footer-location"
+        title={locationLabel ?? undefined}
+      >
+        {locationLabel}
+      </span>
+      <DayRangeButtons
+        active={activeDayRange}
+        onChoose={handleDayRange}
+        testId="day-range-buttons"
+      />
+      <OpenMeteoAttribution
+        className="meteogram-footer-attribution"
+        testId="meteogram-footer-attribution"
+      />
+    </div>
+  );
+
+  if (chartUnavailable) {
+    return (
+      <div className="card empty-state">
+        <p>No forecast data available for the selected parameters.</p>
+      </div>
+    );
+  }
+
   return (
     <div
       className="meteogram-redesign-container card"
@@ -1134,6 +1257,16 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
         className="meteogram-chart-area-white"
         data-testid="meteogram-chart-white-bg"
       >
+        {layoutWarning && (
+          <div
+            className="meteogram-layout-warning"
+            role="status"
+            data-testid="meteogram-layout-warning"
+          >
+            {layoutWarning}
+          </div>
+        )}
+        {resolvedLayout.showLocationLabel === "top" && footerRow}
         <svg
           ref={embeddedSvgRef}
           viewBox={`0 0 ${svgWidth} ${totalSvgHeight}`}
@@ -1153,11 +1286,14 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
         >
           {renderSvgContent("embedded")}
         </svg>
-        <OpenMeteoAttribution
-          className="meteogram-footer-attribution"
-          testId="meteogram-footer-attribution"
-        />
+        {resolvedLayout.showLocationLabel !== "top" && footerRow}
       </div>
+
+      <CopyPngButton
+        className="meteogram-copy-btn-embedded"
+        testId="copy-png-button"
+        onCopy={() => copyChartPng("embedded")}
+      />
 
       {/* Floating Hover Tooltip overlay (disabled in full-screen mode) */}
       <ChartTooltip
@@ -1173,7 +1309,14 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
         location={location}
         userTimezone={resolvedTimezone}
         accumulatedPrecip={accumulatedPrecip}
-        lpiValue={hoverTimestamp ? lpiAt(hoverTimestamp)?.value : null}
+        accumulatedSnowfall={accumulatedSnowfall}
+        lpiValue={
+          hoverTimestamp && layoutQuantities.has("lightning_potential")
+            ? lpiAt(hoverTimestamp)?.value
+            : null
+        }
+        runInfo={hoverRunInfo}
+        quantities={layoutQuantities}
       />
 
       {/* Dedicated Full-Screen View Portal */}
@@ -1184,10 +1327,33 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
             data-testid="fullscreen-meteogram-overlay"
             onDoubleClick={handleDoubleClick}
           >
-            <OpenMeteoAttribution
-              className="fullscreen-header-attribution"
-              testId="fullscreen-header-attribution"
+            <CopyPngButton
+              className="meteogram-copy-btn-fullscreen"
+              testId="fullscreen-copy-png-button"
+              onCopy={() => copyChartPng("fullscreen")}
             />
+            <div
+              ref={fullscreenHeaderRowRef}
+              className="fullscreen-header-row"
+              data-testid="fullscreen-header-row"
+            >
+              <span
+                className="meteogram-location-label"
+                data-testid="fullscreen-header-location"
+                title={locationLabel ?? undefined}
+              >
+                {locationLabel}
+              </span>
+              <DayRangeButtons
+                active={activeDayRange}
+                onChoose={handleDayRange}
+                testId="fullscreen-day-range-buttons"
+              />
+              <OpenMeteoAttribution
+                className="fullscreen-header-attribution"
+                testId="fullscreen-header-attribution"
+              />
+            </div>
             <div
               className="fullscreen-chart-area"
               data-testid="fullscreen-chart-area"
@@ -1229,6 +1395,13 @@ export const MeteogramChart: React.FC<MeteogramChartProps> = ({
                     key={`fullscreen-detail-row-${rowIndex + 1}`}
                     className={`fullscreen-details-row fullscreen-details-row-${rowIndex + 1}`}
                     data-testid={`fullscreen-detail-row-${rowIndex + 1}`}
+                    style={
+                      row.length === 6
+                        ? undefined
+                        : {
+                            gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))`,
+                          }
+                    }
                   >
                     {row.map((item) => (
                       <div

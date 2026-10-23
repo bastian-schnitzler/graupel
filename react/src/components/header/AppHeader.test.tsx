@@ -57,6 +57,34 @@ describe('AppHeader Component', () => {
     expect(onTabChange).toHaveBeenCalledWith('config');
   });
 
+  it.each(['power', 'normal'] as const)(
+    'keeps the power mode toggle in the row below the logo, after the tabs (%s mode, Q-010)',
+    (mode) => {
+      render(
+        <AppHeader
+          activeTab="meteogram"
+          onTabChange={vi.fn()}
+          selectedConfig={sampleConfigs[0]}
+          meteogramConfigs={sampleConfigs}
+          onSelectConfig={vi.fn()}
+          configSaveStatus={null}
+          configSaveError={null}
+          location={dummyLocation}
+          onLocationChange={vi.fn()}
+          mode={mode}
+        />
+      );
+
+      const toggle = screen.getByTestId('power-mode-toggle');
+      const row = toggle.parentElement;
+      expect(row?.classList.contains('header-nav-row')).toBe(true);
+      expect(row?.lastElementChild).toBe(toggle);
+      expect(row?.previousElementSibling?.classList.contains('brand')).toBe(true);
+      const tabs = row?.querySelector('.nav-tabs');
+      expect(tabs !== null).toBe(mode === 'power');
+    }
+  );
+
   it('renders config dropdown in meteogram view and fires onSelectConfig', () => {
     const onSelectConfig = vi.fn();
     render(

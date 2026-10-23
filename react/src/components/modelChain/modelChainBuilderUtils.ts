@@ -210,8 +210,17 @@ export interface AddModelResult {
   newChain?: WeatherModel[];
 }
 
+/** Catalogue capability (longest run length) of a model's metadata. */
+function capabilityOf(meta: ModelMetadata): number {
+  return meta.max_forecast_horizon_hours || meta.max_forecast_hours || 24;
+}
+
 /**
- * Validates capability and appends a newly selected model to the end of a model chain.
+ * Inserts a model by capability (system.md §16.11, #38): before the first chain
+ * model with a larger capability, else at the end. Only the new boundary is
+ * computed (`clamp(cap, H_previous, H_next)` when a model follows, `cap` when
+ * appended); every other boundary and the chain end stay. A capability equal
+ * to a chain model's is the only error.
  */
 export function tryAddModelToChain(
   modelChain: WeatherModel[],
@@ -220,24 +229,64 @@ export function tryAddModelToChain(
 ): AddModelResult {
   const meta = availableModels[modelKey];
   if (!meta) return { success: false };
+  const capability = capabilityOf(meta);
+  // Without metadata a chain model's own end is the best lower bound.
+  const capabilities = modelChain.map((model) => {
+    const chainMeta = getMetaForModel(model, availableModels);
+    return chainMeta ? capabilityOf(chainMeta) : model.max_forecast_horizon_hours;
+  });
 
-  const maxHorizon =
-    meta.max_forecast_horizon_hours || meta.max_forecast_hours || 24;
-  const lastHorizon =
-    modelChain.length > 0
-      ? modelChain[modelChain.length - 1].max_forecast_horizon_hours
-      : 0;
-
-  if (maxHorizon <= lastHorizon) {
+  const same = capabilities.findIndex((cap) => cap === capability);
+  if (same !== -1) {
     return {
       success: false,
-      error: `Model ${meta.name} max horizon (${maxHorizon}h) is <= current last transition (${lastHorizon}h).`,
+      error: `${meta.name} and ${modelChain[same].name} have the same horizon (${capability}h).`,
     };
   }
 
+  const index = capabilities.findIndex((cap) => cap > capability);
+  const position = index === -1 ? modelChain.length : index;
+  const previousEnd =
+    position > 0 ? modelChain[position - 1].max_forecast_horizon_hours : 0;
+  const horizon =
+    index === -1
+      ? capability
+      : Math.min(
+          Math.max(capability, previousEnd),
+          modelChain[index].max_forecast_horizon_hours,
+        );
+  const added: WeatherModel = {
+    name: meta.name,
+    id: meta.id,
+    ...(meta.short_name ? { short_name: meta.short_name } : {}),
+    max_forecast_horizon_hours: horizon,
+  };
   const newChain = [
-    ...modelChain,
-    { name: meta.name, id: meta.id, max_forecast_horizon_hours: maxHorizon },
+    ...modelChain.slice(0, position),
+    added,
+    ...modelChain.slice(position),
   ];
   return { success: true, newChain };
+}
+
+/**
+ * Formats a model run start (UTC instant) as local "dd.mm. HH:MM".
+ */
+export function formatModelRunTime(
+  runTime?: string | null,
+  timeZone?: string,
+): string | null {
+  if (!runTime) return null;
+  const date = new Date(runTime);
+  if (isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone,
+  }).formatToParts(date);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value;
+  return `${part("day")}.${part("month")}. ${part("hour")}:${part("minute")}`;
 }

@@ -1,5 +1,7 @@
 import type { DataPoint, WeatherModel } from "../types";
 import { HOUR_MS } from "./timeline";
+import { getAxisPreset } from "../layouts/seriesPresets";
+import { buildHeldSegments } from "../components/drawing/meteogramPaths";
 
 export interface LpiSegment {
   path: string;
@@ -30,19 +32,22 @@ export function calculateConvectiveExtremes(
         cinMaximum = Math.max(cinMaximum, Math.abs(point.value));
     }
   }
+  // Same rule as the CAPE / CIN half scales of the layouts.
   return {
-    capeMax: Math.ceil(capeMaximum * 1.1),
-    cinMax: Math.ceil(cinMaximum * 1.1),
+    capeMax: getAxisPreset("cape").zeroBasedMax!(capeMaximum),
+    cinMax: getAxisPreset("convective_inhibition").zeroBasedMax!(cinMaximum),
   };
 }
 
 /**
- * Checks whether the given weather model supports the lightning potential index (LPI).
+ * Checks whether the given weather model lists a quantity in its
+ * `supported_variables` (resolved by model name or id, case-insensitive).
  */
-export function isLpiSupportedByModel(
+export function isQuantitySupportedByModel(
+  quantityId: string,
   modelName: string | undefined,
   modelChain: WeatherModel[],
-  availableModels?: Record<string, any>,
+  availableModels?: Record<string, Partial<WeatherModel>>,
 ): boolean {
   if (!modelName) return false;
   const normalize = (name: string) =>
@@ -60,9 +65,55 @@ export function isLpiSupportedByModel(
           ),
       ),
     )?.[1] || chainModel;
-  return (
-    metadata?.supported_variables?.includes("lightning_potential") === true
+  return metadata?.supported_variables?.includes(quantityId) === true;
+}
+
+/**
+ * Checks whether the given weather model supports the lightning potential index (LPI).
+ */
+export function isLpiSupportedByModel(
+  modelName: string | undefined,
+  modelChain: WeatherModel[],
+  availableModels?: Record<string, Partial<WeatherModel>>,
+): boolean {
+  return isQuantitySupportedByModel(
+    "lightning_potential",
+    modelName,
+    modelChain,
+    availableModels,
   );
+}
+
+/**
+ * Valid point of an optional catalogued quantity at a timestamp: only from
+ * the active main-chain model and only when that model supports it.
+ */
+export function getSupportedPointAtTimestamp(
+  quantityId: string,
+  ts: number,
+  timeMap: Map<number, Record<string, DataPoint>>,
+  modelChain: WeatherModel[],
+  availableModels?: Record<string, Partial<WeatherModel>>,
+): DataPoint | null {
+  const fields = timeMap.get(ts);
+  const point = fields?.[quantityId];
+  const activeModel =
+    fields?.["cape"]?.model ||
+    fields?.["convective_inhibition"]?.model ||
+    fields?.["temperature"]?.model ||
+    point?.model;
+  return point &&
+    point.model === activeModel &&
+    isQuantitySupportedByModel(
+      quantityId,
+      activeModel,
+      modelChain,
+      availableModels,
+    ) &&
+    point.value !== null &&
+    Number.isFinite(point.value)
+    ? point
+    : null;
 }
 
 /**
@@ -72,22 +123,15 @@ export function getLpiAtTimestamp(
   ts: number,
   timeMap: Map<number, Record<string, DataPoint>>,
   modelChain: WeatherModel[],
-  availableModels?: Record<string, any>,
+  availableModels?: Record<string, Partial<WeatherModel>>,
 ): DataPoint | null {
-  const fields = timeMap.get(ts);
-  const point = fields?.["lightning_potential"];
-  const activeModel =
-    fields?.["cape"]?.model ||
-    fields?.["convective_inhibition"]?.model ||
-    fields?.["temperature"]?.model ||
-    point?.model;
-  return point &&
-    point.model === activeModel &&
-    isLpiSupportedByModel(activeModel, modelChain, availableModels) &&
-    point.value !== null &&
-    Number.isFinite(point.value)
-    ? point
-    : null;
+  return getSupportedPointAtTimestamp(
+    "lightning_potential",
+    ts,
+    timeMap,
+    modelChain,
+    availableModels,
+  );
 }
 
 /**
@@ -97,76 +141,20 @@ export function buildLpiSegments(
   timestamps: number[],
   timeMap: Map<number, Record<string, DataPoint>>,
   modelChain: WeatherModel[],
-  availableModels: Record<string, any> | undefined,
+  availableModels: Record<string, Partial<WeatherModel>> | undefined,
   convectiveZero: number,
   convectiveHalfHeight: number,
   getX: (ts: number) => number,
   timelineEndMs: number,
 ): LpiSegment[] {
-  const lpiSegments: LpiSegment[] = [];
-  let previousLpiTime: number | null = null;
-
-  timestamps.forEach((ts) => {
-    const point = getLpiAtTimestamp(ts, timeMap, modelChain, availableModels);
-    if (!point) {
-      previousLpiTime = null;
-      return;
-    }
-    const x = getX(ts);
-    const y =
+  return buildHeldSegments(
+    timestamps,
+    (ts) => getLpiAtTimestamp(ts, timeMap, modelChain, availableModels),
+    (value) =>
       convectiveZero -
-      (Math.max(0, Math.min(point.value!, 30)) / 30) * convectiveHalfHeight;
-    const previous = lpiSegments[lpiSegments.length - 1];
-    if (
-      previous &&
-      previousLpiTime !== null &&
-      ts - previousLpiTime === HOUR_MS &&
-      previous.model === point.model
-    ) {
-      previous.path += ` L ${x} ${y}`;
-    } else {
-      lpiSegments.push({
-        path: `M ${x} ${y}`,
-        model: point.model,
-        endTime: ts + HOUR_MS,
-        lastY: y,
-      });
-    }
-    const segment = lpiSegments[lpiSegments.length - 1];
-    segment.endTime = ts + HOUR_MS;
-    segment.lastY = y;
-    previousLpiTime = ts;
-  });
-
-  for (const segment of lpiSegments) {
-    // The final observation occupies its start-stamped hour up to handover.
-    segment.path += ` L ${getX(Math.min(segment.endTime, timelineEndMs))} ${segment.lastY}`;
-  }
-
-  return lpiSegments;
-}
-
-export interface ConvectiveBarGeometry {
-  y: number;
-  height: number;
-  fill: string;
-}
-
-/**
- * Calculates bar vertical positioning, height, and fill color for CAPE and CIN bars.
- */
-export function calculateConvectiveBarGeometry(
-  value: number,
-  isCape: boolean,
-  capeMax: number,
-  cinMax: number,
-  convectiveZero: number,
-  convectiveHalfHeight: number,
-): ConvectiveBarGeometry {
-  const height =
-    (isCape ? Math.max(0, value) / capeMax : Math.abs(value) / cinMax) *
-    convectiveHalfHeight;
-  const y = isCape ? convectiveZero - height : convectiveZero;
-  const fill = isCape ? "#f59e0b" : "#0284c7";
-  return { y, height, fill };
+      (Math.max(0, Math.min(value, 30)) / 30) * convectiveHalfHeight,
+    getX,
+    timelineEndMs,
+    HOUR_MS,
+  );
 }

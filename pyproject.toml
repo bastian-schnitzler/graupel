@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "graupel"
-version = "0.1.0"
+version = "0.2.1"
 description = "Build customizable meteograms from Open-Meteo forecast data"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -15,7 +15,8 @@ dependencies = [
     "nest-asyncio>=1.6.0",
     "pydantic>=2.13.5",
     "python-dateutil>=2.9.0.post0",
-    "pywebview>=6.2.1",
+	"pywebview[qt]>=6.2.1; sys_platform == 'linux'",
+	"pywebview>=6.2.1; sys_platform != 'linux'",
     "structlog>=26.1.0",
     "tzdata>=2024.1",
     "typer>=0.27.2",
@@ -48,10 +49,12 @@ line-length = 79
 
 [dependency-groups]
 dev = [
+    "pyproj>=3.7.1",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pyyaml>=6.0.3",
     "respx>=0.23.1",
+    "shapely>=2.1.2",
 ]
 
 [project.gui-scripts]

@@ -6,6 +6,8 @@ export interface MeteogramModelChainsProps {
   activeModelChain: WeatherModel[];
   activeCloudModelChain: WeatherModel[];
   availableModels: Record<string, ModelMetadata>;
+  /** Metadata for the cloud chain cards (defaults to `availableModels`). */
+  cloudAvailableModels?: Record<string, ModelMetadata>;
   onModelChainChange: (newChain: WeatherModel[]) => void;
   onModelChainResizeEnd: () => void;
   onCloudModelChainChange: (newChain: WeatherModel[]) => void;
@@ -21,6 +23,7 @@ export const MeteogramModelChains: React.FC<MeteogramModelChainsProps> = ({
   activeModelChain,
   activeCloudModelChain,
   availableModels,
+  cloudAvailableModels,
   onModelChainChange,
   onModelChainResizeEnd,
   onCloudModelChainChange,
@@ -60,7 +63,7 @@ export const MeteogramModelChains: React.FC<MeteogramModelChainsProps> = ({
           onChange={onCloudModelChainChange}
           onResizeEnd={onCloudModelChainResizeEnd}
           onBoundaryDrag={onCloudBoundaryDrag}
-          availableModels={availableModels}
+          availableModels={cloudAvailableModels ?? availableModels}
           readOnly={false}
           allowReorder={false}
           allowAdd={false}

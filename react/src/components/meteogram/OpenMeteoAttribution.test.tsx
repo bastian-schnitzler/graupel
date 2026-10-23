@@ -47,13 +47,23 @@ describe("OpenMeteoAttribution", () => {
 
   it("lays out fullscreen attribution as a separate row above the chart", () => {
     const rule = appCss.match(
-      /\.fullscreen-header-attribution\s*\{([^}]*)\}/s,
+      /\.fullscreen-header-row\s*\{([^}]*)\}/s,
     )?.[1];
     expect(rule).toBeTruthy();
     expect(rule).toMatch(/display:\s*flex/);
-    expect(rule).toMatch(/justify-content:\s*flex-end/);
+    expect(rule).toMatch(/justify-content:\s*space-between/);
     expect(rule).toMatch(/flex-shrink:\s*0/);
     expect(rule).not.toMatch(/position:\s*absolute/);
+  });
+
+  it("aligns label and attribution with the drawing-area borders (5% = 50/1000 viewBox units)", () => {
+    for (const selector of ["meteogram-footer-row", "fullscreen-header-row"]) {
+      const rule = appCss.match(
+        new RegExp(`\\.${selector}\\s*\\{([^}]*)\\}`, "s"),
+      )?.[1];
+      expect(rule).toMatch(/padding:\s*\S+\s+5%\s+\S+\s+5%;/);
+      expect(rule).toMatch(/align-items:\s*baseline/);
+    }
   });
 
   it("intercepts link clicks and invokes apiService.openExternalUrl", () => {

@@ -125,7 +125,11 @@ def test_move_cursor_converts_absolute_css_position_for_windows_dpi(
     assert calls == [expected]
 
 
-def test_move_cursor_is_safe_off_windows_and_rejects_invalid_input():
+def test_move_cursor_is_safe_off_windows_and_rejects_invalid_input(
+    monkeypatch,
+):
+    # On a Windows runner SetCursorPos really moves the cursor and succeeds.
+    monkeypatch.setattr(bridge.sys, "platform", "linux")
     api = bridge.API(storage_path=":memory:")
     assert api.move_cursor_to(10, 20, 1) is False
     assert api.move_cursor_to(float("nan"), 20, 1) is False

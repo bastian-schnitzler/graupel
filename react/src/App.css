@@ -190,6 +190,67 @@ body {
   box-shadow: 0 0.125rem 0.5rem rgba(59, 130, 246, 0.3);
 }
 
+.header-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Power-mode switch (system.md §3.1), visible in both modes. */
+.power-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background-color: rgba(0, 0, 0, 0.2);
+  border: 0.0625rem solid var(--border-color);
+  border-radius: 0.5rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.power-mode-toggle:hover {
+  color: var(--text-primary);
+}
+
+.power-mode-toggle.active {
+  color: var(--accent-amber);
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
+.power-mode-switch {
+  position: relative;
+  width: 1.75rem;
+  height: 1rem;
+  border-radius: 0.5rem;
+  background-color: var(--border-color);
+  transition: background-color 0.2s ease;
+}
+
+.power-mode-switch::after {
+  content: "";
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background-color: var(--text-primary);
+  transition: transform 0.2s ease;
+}
+
+.power-mode-toggle.active .power-mode-switch {
+  background-color: var(--accent-amber);
+}
+
+.power-mode-toggle.active .power-mode-switch::after {
+  transform: translateX(0.75rem);
+}
+
 .header-config-control-group {
   display: flex;
   align-items: center;
@@ -228,6 +289,77 @@ body {
   cursor: not-allowed;
 }
 
+/* History menu and historic badge (system.md §10, #144). */
+.history-menu {
+  position: relative;
+}
+.history-dropdown {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  z-index: 1200;
+  width: 22rem;
+  max-width: calc(100vw - 2rem);
+  max-height: 20rem;
+  overflow-y: auto;
+  background-color: var(--bg-card, #1e293b);
+  border: 0.0625rem solid var(--border-color);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.4);
+}
+.history-status {
+  padding: 0.625rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.history-status.error {
+  color: #f87171;
+}
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+}
+.history-item {
+  padding: 0.375rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.history-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+.history-item-version {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+.historic-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  background-color: rgba(245, 158, 11, 0.15);
+  color: var(--accent-amber);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.historic-version,
+.historic-missing {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.historic-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.historic-back-btn {
+  height: 2.125rem;
+  padding: 0 0.625rem;
+  font-size: 0.8rem;
+}
+
 .header-config-selector {
   display: flex;
   align-items: center;
@@ -240,6 +372,27 @@ body {
 
 .sparkle-icon {
   color: var(--accent-amber);
+}
+
+.header-auto-chain {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 0.0625rem solid var(--border-color);
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.header-auto-chain-text {
+  max-width: 30rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .config-select-dropdown {
@@ -261,6 +414,18 @@ body {
   color: var(--text-primary);
   padding: 0.5rem 0.75rem;
   font-weight: 500;
+}
+
+/* Auto entry (system.md §16.4): not a stored configuration. */
+.config-select-dropdown.auto-selected,
+.config-select-dropdown option.config-option-auto {
+  font-style: italic;
+  color: #c4b5fd;
+}
+
+.config-select-dropdown.auto-selected option:not(.config-option-auto) {
+  font-style: normal;
+  color: var(--text-primary);
 }
 
 .config-select-dropdown option:hover,
@@ -365,6 +530,324 @@ body {
   border-color: var(--accent-blue);
 }
 
+/* Config View tabs (system.md §7) */
+.config-view-root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1 0 auto;
+  min-height: 0;
+}
+
+.config-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 0.0625rem solid var(--border-color);
+}
+
+.config-tab {
+  padding: 0.5rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 0.125rem solid transparent;
+  margin-bottom: -0.0625rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.config-tab:hover {
+  color: var(--text-primary);
+}
+
+.config-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent-blue);
+}
+
+/* Config → Basic tab: data folder and forecast archive (system.md §8.2, §9.3) */
+.basic-settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 48rem;
+}
+
+.settings-path {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.settings-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.settings-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 12rem);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.settings-switch-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.settings-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 0.9rem;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.settings-switch-track {
+  position: relative;
+  flex: none;
+  width: 1.75rem;
+  height: 1rem;
+  border-radius: 0.5rem;
+  background-color: var(--border-color);
+  transition: background-color 0.2s ease;
+}
+
+.settings-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background-color: var(--text-primary);
+  transition: transform 0.2s ease;
+}
+
+.settings-switch.active .settings-switch-track {
+  background-color: var(--accent-blue);
+}
+
+.settings-switch.active .settings-switch-track::after {
+  transform: translateX(0.75rem);
+}
+
+.settings-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: rgba(0, 0, 0, 0.55);
+}
+
+.settings-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(32rem, 100%);
+}
+
+.settings-dialog-title {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.settings-dialog-actions {
+  justify-content: flex-end;
+}
+
+/* Config → Meteogram tab: meteogram configurations (system.md §4.3) */
+.layout-detail-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  text-align: left;
+}
+
+.layout-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.layout-warning,
+.layout-error {
+  margin: 0;
+  color: #f59e0b;
+  font-size: 0.85rem;
+}
+
+.layout-error {
+  color: var(--accent-red);
+}
+
+.layout-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.layout-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.layout-section-title {
+  margin: 0.5rem 0 0;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.layout-fixed-icon {
+  cursor: default;
+}
+
+/* Layout editor (#142): the editor column scrolls, the preview stays on top */
+.meteogram-layouts-panel .config-editor-main {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.meteogram-layouts-panel .layout-detail-card {
+  height: max-content;
+}
+
+.layout-detail-card > * {
+  flex-shrink: 0;
+}
+
+.layout-preview {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  height: 22rem;
+  min-height: 0;
+  background-color: var(--bg-dark);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.layout-preview > .meteogram-view {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.layout-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.layout-editor-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+}
+
+.layout-editor-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.layout-editor-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+}
+
+.layout-editor-area-header,
+.layout-editor-fields,
+.layout-editor-series {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.layout-editor-area-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.layout-editor-axis {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.layout-editor-series-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.layout-editor .select-input {
+  width: auto;
+  min-width: 0;
+  max-width: 14rem;
+}
+
+.layout-editor .layout-editor-short {
+  width: 5rem;
+}
+
+.layout-editor-color {
+  width: 2rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.layout-editor-row-actions {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.layout-editor-icon-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+}
+
+.layout-editor-add {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
 /* Config View */
 .config-view {
   display: grid;
@@ -416,7 +899,7 @@ body {
 }
 
 .config-delete-btn:hover:not(:disabled) {
-  color: #ef4444;
+  color: var(--accent-red);
   border-color: #ef4444;
 }
 
@@ -425,7 +908,8 @@ body {
   cursor: not-allowed;
 }
 
-.config-duplicate-btn {
+.config-duplicate-btn,
+.config-auto-btn {
   padding: 0.375rem 0.625rem;
   display: inline-flex;
   align-items: center;
@@ -433,7 +917,8 @@ body {
   color: var(--text-secondary);
 }
 
-.config-duplicate-btn:hover:not(:disabled) {
+.config-duplicate-btn:hover:not(:disabled),
+.config-auto-btn:hover:not(:disabled) {
   color: var(--text-primary);
   border-color: var(--text-secondary);
 }
@@ -441,6 +926,36 @@ body {
 .config-duplicate-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+/* Location field per configuration with the display-name pen (#175). */
+.config-location-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.config-location-row .location-selector-widget {
+  flex: 1;
+  min-width: 0;
+}
+.config-location-name-btn {
+  flex-shrink: 0;
+  padding: 0.5rem;
+  height: 2.125rem;
+  width: 2.125rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.config-location-name-btn.active {
+  border-color: var(--accent-amber);
+}
+.config-location-name-input {
+  margin-top: 0.5rem;
+}
+
+.config-auto-region {
+  margin-top: 0.375rem;
 }
 
 .config-list {
@@ -865,14 +1380,63 @@ body {
   z-index: 100;
   box-shadow: 0 0.625rem 1.5625rem rgba(0, 0, 0, 0.5);
   font-size: 0.8rem;
+  text-align: left;
 }
 
-.tooltip-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-  margin-top: 0.375rem;
+.tooltip-content-wide {
+  width: 24rem;
+}
+
+.tooltip-title {
+  margin-bottom: 0.375rem;
+}
+
+.tooltip-runs {
+  margin-bottom: 0.375rem;
+}
+
+.tooltip-runs-title {
   color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tooltip-specs {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 0.75rem;
+  row-gap: 0.125rem;
+  margin: 0.375rem 0 0;
+  color: var(--text-secondary);
+}
+
+.tooltip-spec {
+  display: contents;
+}
+
+.tooltip-specs dt {
+  font-weight: 700;
+}
+
+.tooltip-specs dd {
+  margin: 0;
+}
+
+.tooltip-horizon-info {
+  margin-top: 0.5rem;
+  padding-top: 0.375rem;
+  border-top: 0.0625rem solid var(--border-color);
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.tooltip-horizon-info p {
+  margin: 0 0 0.375rem;
+}
+
+.tooltip-horizon-info p:last-child {
+  margin-bottom: 0;
 }
 
 .range-badge {
@@ -1153,6 +1717,17 @@ body {
   margin-bottom: 0;
 }
 
+/* Clear button between the location field and refresh (#166). */
+.clear-search-btn {
+  flex-shrink: 0;
+  padding: 0.5rem;
+  height: 2.125rem;
+  width: 2.125rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .refresh-forecast-btn {
   white-space: nowrap;
   flex-shrink: 0;
@@ -1181,6 +1756,20 @@ body {
   color: var(--accent-amber);
 }
 
+/* Pin button: opens the map picker (header and configuration field). */
+.location-pin-btn {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  z-index: 1;
+}
+.location-pin-btn:disabled {
+  cursor: default;
+}
+
 .search-input {
   padding-left: 2rem;
   padding-right: 1.75rem;
@@ -1188,17 +1777,29 @@ body {
   font-size: 0.82rem;
 }
 
-.clear-btn {
+/* Drop-down arrow (#166): most-used locations. */
+.history-btn {
   position: absolute;
-  right: 0.625rem;
+  right: 0.375rem;
   background: none;
   border: none;
+  padding: 0.125rem;
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: transform 0.15s ease;
 }
+
+.history-btn:hover {
+  color: var(--text-primary);
+}
+
+.history-btn.open {
+  transform: rotate(180deg);
+}
+
 
 .autocomplete-dropdown {
   position: absolute;
@@ -1429,6 +2030,12 @@ body {
   align-items: center;
 }
 
+.tooltip-group-divider {
+  height: 0;
+  border-top: 0.0625rem solid #475569;
+  margin: 0.125rem 0;
+}
+
 .tooltip-row .label {
   color: #94a3b8;
 }
@@ -1455,6 +2062,12 @@ body {
 }
 .tooltip-row .val.prob {
   color: #38bdf8;
+}
+.tooltip-row .val.cape {
+  color: #f59e0b;
+}
+.tooltip-row .val.cin {
+  color: #0284c7;
 }
 
 /* Loading & Banners */
@@ -1703,7 +2316,7 @@ body {
 
 /* UI icons inherit the same screen scale. SVG plot glyphs keep logical chart units. */
 .app-header svg:not(.meteogram-svg-integrated),
-.config-view svg,
+.config-view svg:not(.meteogram-svg-integrated),
 .model-chains-container svg {
   width: 1em;
   height: 1em;
@@ -1758,20 +2371,143 @@ select {
   color: #1e293b;
 }
 
-.meteogram-footer-attribution {
+/* Location label (left) and Open-Meteo attribution (right) line up with the
+   drawing-area borders: paddingLeft / paddingRight 50 of the 1000-unit
+   viewBox = 5% of the SVG width. Both share one baseline-aligned row below the embedded chart / above the
+   fullscreen chart. */
+.meteogram-footer-row {
   display: flex;
-  justify-content: flex-end;
-  padding: 2px 8px 3px 8px;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 2px 5% 3px 5%;
   background: #ffffff;
   border-bottom-left-radius: 0.625rem;
   border-bottom-right-radius: 0.625rem;
   flex-shrink: 0;
 }
 
+/* Day-range buttons (#162), centred on the label row's text line. The
+   group has no layout height, so the row (and location label and
+   attribution in it) keeps its size; the buttons overflow it evenly. */
+.day-range-buttons {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  height: 0;
+  flex-shrink: 0;
+  gap: 0.125rem;
+}
+
+.day-range-btn {
+  background: #f1f5f9;
+  border: 0.0625rem solid #cbd5e1;
+  border-radius: 0.3125rem;
+  color: #334155;
+  cursor: pointer;
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 0.1875rem 0.4375rem;
+}
+
+.day-range-btn:hover {
+  background: #e2e8f0;
+}
+
+.day-range-btn.active {
+  background: #3b82f6;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+/* Layout option showLocationLabel = "top": the row sits above the chart. */
+.meteogram-footer-row--top {
+  border-radius: 0.625rem 0.625rem 0 0;
+}
+
+/* Invalid stored layout: the built-in layout is drawn below this note. */
+.meteogram-layout-warning {
+  padding: 4px 5%;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.fullscreen-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 2px 5% 2px 5%;
+  background-color: #ffffff;
+  flex-shrink: 0;
+}
+
+.meteogram-location-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 14px;
+  color: #475569;
+  user-select: none;
+}
+
+/* Copy-as-PNG button: top right, inside the 5% right margin next to the
+   drawing area (above the right axis labels), never part of the export. */
+.meteogram-copy-btn {
+  position: absolute;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.375rem;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.meteogram-copy-btn:hover:not(:disabled) {
+  color: #1e293b;
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.meteogram-copy-btn:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.meteogram-copy-btn[data-state="done"] {
+  color: #16a34a;
+  border-color: #86efac;
+}
+
+.meteogram-copy-btn[data-state="error"] {
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.meteogram-copy-btn-embedded {
+  top: 0.625rem;
+  right: 0.625rem;
+}
+
+.meteogram-copy-btn-fullscreen {
+  top: 0.25rem;
+  right: 0.5rem;
+}
+
+.meteogram-footer-attribution,
 .fullscreen-header-attribution {
   display: flex;
   justify-content: flex-end;
-  padding: 2px 12px;
-  background-color: #ffffff;
   flex-shrink: 0;
 }

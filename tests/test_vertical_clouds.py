@@ -141,141 +141,116 @@ def test_barometric_altitude_estimate():
     assert 5000 <= alt500 <= 6000
 
 
+class _FakeCloudClient:
+    """Serves fixed hourly 850 hPa cloud values per Open-Meteo model id."""
+
+    def __init__(self, cloud_by_model):
+        self.cloud_by_model = cloud_by_model
+        self.calls = []
+
+    async def _get(self, params):
+        self.calls.append(params)
+        series = self.cloud_by_model.get(params["models"], {})
+        times = list(series)
+        return {
+            "timezone": "GMT",
+            "hourly": {
+                "time": times,
+                "cloud_cover_850hPa": [series[t] for t in times],
+                "geopotential_height_850hPa": [1450.0] * len(times),
+            },
+        }
+
+
+def _cloud_model(name, model_id, horizon, region="Europe", resolution_km=7.0):
+    # Cloud-chain eligibility requires at least 10 pressure levels.
+    return WeatherModel(
+        name=name,
+        id=model_id,
+        region=region,
+        supports_vertical_cloud_profile=True,
+        spatial_resolution_km=resolution_km,
+        max_forecast_horizon_hours=horizon,
+        pressure_levels_hpa=[1000, 950, 925, 900, 850, 800, 700, 600, 500, 400],
+    )
+
+
+def _level_850(profile):
+    return next(l for l in profile.levels if l.pressure_hpa == 850)
+
+
 @pytest.mark.asyncio
-async def test_vertical_cloud_storage_and_service():
-    storage = Storage(":memory:")
-    service = ForecastService(storage=storage)
+async def test_vertical_cloud_forecast_is_fetched_live_without_sqlite_cache(
+    tmp_path,
+):
+    import sqlite3
 
-    loc = Location(
-        name="Zurich", latitude=47.376, longitude=8.541, elevation=408
-    )
+    db_path = tmp_path / "meteogram.db"
+    conn = sqlite3.connect(db_path)
+    try:
+        # A database from an older version still contains the former cache.
+        conn.execute(
+            "CREATE TABLE vertical_cloud_forecasts (id TEXT PRIMARY KEY, data TEXT)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
-    # Save mock vertical cloud forecast to storage
-    mock_forecast = DetailedCloudForecast(
-        location=loc,
-        profiles=[
-            VerticalCloudProfile(
-                timestamp="2026-09-11T00:00:00Z",
-                source_model_id="meteoswiss_icon_ch1",
-                source_model_name="ICON-CH1",
-                levels=[
-                    VerticalCloudLevel(
-                        pressure_hpa=1000,
-                        altitude_m_asl=110,
-                        cloud_cover_percent=20,
-                    ),
-                    VerticalCloudLevel(
-                        pressure_hpa=850,
-                        altitude_m_asl=1450,
-                        cloud_cover_percent=80,
-                    ),
-                    VerticalCloudLevel(
-                        pressure_hpa=500,
-                        altitude_m_asl=5570,
-                        cloud_cover_percent=40,
-                    ),
-                ],
+    storage = Storage(str(db_path))
+    client = _FakeCloudClient({"icon_eu": {"2026-09-11T00:00": 80.0}})
+    service = ForecastService(client=client, storage=storage)
+    loc = Location(name="Zugspitze", latitude=47.4211, longitude=10.9853)
+    model = _cloud_model("ICON-EU", "icon_eu", 6)
+
+    first = await service.fetch_vertical_cloud_model_forecast(loc, model)
+    client.cloud_by_model["icon_eu"] = {"2026-09-11T00:00": 20.0}
+    second = await service.fetch_vertical_cloud_model_forecast(loc, model)
+
+    assert len(client.calls) == 2
+    assert _level_850(first.profiles[0]).cloud_cover_percent == 80
+    assert _level_850(second.profiles[0]).cloud_cover_percent == 20
+
+    conn = sqlite3.connect(db_path)
+    try:
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
             )
-        ],
-    )
-
-    storage.save_vertical_cloud_forecast(
-        loc, "meteoswiss_icon_ch1", mock_forecast
-    )
-
-    read_back = storage.read_vertical_cloud_forecast(
-        loc, "meteoswiss_icon_ch1"
-    )
-    assert read_back is not None
-    assert len(read_back.profiles) == 1
-    assert read_back.profiles[0].levels[1].cloud_cover_percent == 80
+        }
+    finally:
+        conn.close()
+    storage.close()
+    assert "vertical_cloud_forecasts" not in tables
 
 
 @pytest.mark.asyncio
 async def test_get_vertical_cloud_forecast_source_transitions():
-    storage = Storage(":memory:")
-    service = ForecastService(storage=storage)
-
     loc = Location(
         name="Zurich", latitude=47.376, longitude=8.541, elevation=408
     )
-
-    std_10_levels = [1000, 950, 925, 900, 850, 800, 700, 600, 500, 400]
-    m_ch1 = WeatherModel(
-        name="ICON-CH1",
-        id="meteoswiss_icon_ch1",
-        region="Switzerland / Alps",
-        supports_vertical_cloud_profile=True,
-        spatial_resolution_km=1.1,
-        max_forecast_horizon_hours=2,
-        pressure_levels_hpa=std_10_levels,
-    )
-    m_global = WeatherModel(
-        name="GFS Seamless",
-        id="gfs_seamless",
-        region="Global",
-        supports_vertical_cloud_profile=True,
-        spatial_resolution_km=13.0,
-        max_forecast_horizon_hours=10,
-        pressure_levels_hpa=std_10_levels,
-    )
-
-    # Seed mock storage forecasts for both models
-    storage.save_vertical_cloud_forecast(
-        loc,
+    m_ch1 = _cloud_model(
+        "ICON-CH1",
         "meteoswiss_icon_ch1",
-        DetailedCloudForecast(
-            location=loc,
-            profiles=[
-                VerticalCloudProfile(
-                    timestamp="2026-09-11T00:00:00Z",
-                    source_model_id="meteoswiss_icon_ch1",
-                    source_model_name="ICON-CH1",
-                    levels=[
-                        VerticalCloudLevel(
-                            pressure_hpa=850,
-                            altitude_m_asl=1450,
-                            cloud_cover_percent=50,
-                        )
-                    ],
-                ),
-                VerticalCloudProfile(
-                    timestamp="2026-09-11T01:00:00Z",
-                    source_model_id="meteoswiss_icon_ch1",
-                    source_model_name="ICON-CH1",
-                    levels=[
-                        VerticalCloudLevel(
-                            pressure_hpa=850,
-                            altitude_m_asl=1450,
-                            cloud_cover_percent=60,
-                        )
-                    ],
-                ),
-            ],
-        ),
+        2,
+        region="Switzerland / Alps",
+        resolution_km=1.1,
+    )
+    m_global = _cloud_model(
+        "GFS Seamless", "gfs_seamless", 10, region="Global", resolution_km=13.0
     )
 
-    storage.save_vertical_cloud_forecast(
-        loc,
-        "gfs_seamless",
-        DetailedCloudForecast(
-            location=loc,
-            profiles=[
-                VerticalCloudProfile(
-                    timestamp="2026-09-11T03:00:00Z",
-                    source_model_id="gfs_seamless",
-                    source_model_name="GFS Seamless",
-                    levels=[
-                        VerticalCloudLevel(
-                            pressure_hpa=850,
-                            altitude_m_asl=1450,
-                            cloud_cover_percent=30,
-                        )
-                    ],
-                ),
-            ],
-        ),
+    client = _FakeCloudClient(
+        {
+            "meteoswiss_icon_ch1": {
+                "2026-09-11T00:00": 50.0,
+                "2026-09-11T01:00": 60.0,
+            },
+            # Requests use the prefixed Open-Meteo id for GFS.
+            "ncep_gfs_seamless": {"2026-09-11T03:00": 30.0},
+        }
     )
+    service = ForecastService(client=client, storage=Storage(":memory:"))
 
     timestamps = [
         "2026-09-11T00:00:00Z",

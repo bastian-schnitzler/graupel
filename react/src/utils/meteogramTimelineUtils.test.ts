@@ -63,6 +63,33 @@ describe('meteogramTimelineUtils', () => {
     expect(segments[0].endX).toBe(segments[1].startX);
   });
 
+  it('calculateModelSegments adds the catalogue nickname as short label', () => {
+    const startMs = Date.parse('2026-09-16T00:00:00Z');
+    const timeline = createTimelineScale(startMs, startMs + 120 * 3600 * 1000, 0, 1000);
+    const chain: WeatherModel[] = [
+      { name: 'GeoSphere AROME Austria', max_forecast_horizon_hours: 48 },
+      { name: 'ICON-EU', max_forecast_horizon_hours: 120 },
+    ];
+    const catalogue = {
+      geosphere_arome_austria: {
+        id: 'geosphere_arome_austria',
+        name: 'GeoSphere AROME Austria',
+        short_name: 'AROME AT',
+        max_forecast_horizon_hours: 60,
+      },
+    };
+
+    const segments = calculateModelSegments(
+      chain,
+      '2026-09-16T00:00:00Z',
+      timeline,
+      undefined,
+      catalogue,
+    );
+    expect(segments[0].shortLabel).toBe('AROME AT');
+    expect(segments[1].shortLabel).toBeNull();
+  });
+
   it('filterVisibleDayGroups filters out day groups outside timeline', () => {
     const dayGroups = [
       { dayKey: '2026-09-15', dateLabel: '15.09', weekdayLabel: 'Tue', indices: [0] },

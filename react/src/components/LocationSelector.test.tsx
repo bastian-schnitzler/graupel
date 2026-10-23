@@ -491,6 +491,28 @@ describe('LocationSelector Component', () => {
       expect(container.querySelector('.fullscreen-map-modal')).toBeTruthy();
     });
 
+    it('the orange pin opens the picker, also without a preview map', () => {
+      const { container } = render(
+        <LocationSelector location={initialLoc} onChange={vi.fn()} showMap={false} />,
+      );
+      expect(container.querySelector('.map-wrapper')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Choose location on map' }));
+      expect(container.querySelector('.fullscreen-map-modal')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(container.querySelector('.fullscreen-map-modal')).toBeNull();
+    });
+
+    it('a disabled selector opens no picker from pin or map', () => {
+      const { container } = render(
+        <LocationSelector location={initialLoc} onChange={vi.fn()} disabled />,
+      );
+      const pin = screen.getByRole('button', { name: 'Choose location on map' }) as HTMLButtonElement;
+      expect(pin.disabled).toBe(true);
+      fireEvent.click(pin);
+      fireEvent.click(container.querySelector('.map-wrapper')!);
+      expect(container.querySelector('.fullscreen-map-modal')).toBeNull();
+    });
+
     it('feature double click updates the location input and closes fullscreen in Config view', async () => {
       const change = vi.fn(), navigate = vi.fn();
       const {container,rerender} = render(<LocationSelector location={initialLoc} onChange={change} currentView="config" onNavigateView={navigate}/>);
@@ -693,7 +715,7 @@ describe('LocationSelector Component', () => {
       fireEvent.focus(searchInput);
 
       await waitFor(() => {
-        expect(getTopSpy).toHaveBeenCalledWith(10);
+        expect(getTopSpy).toHaveBeenCalledWith(); // every stored location (#166)
         expect(screen.getByText('Munich')).toBeTruthy();
         expect(screen.getByText('Berlin')).toBeTruthy();
       });
@@ -731,13 +753,99 @@ describe('LocationSelector Component', () => {
 
       const { container } = render(<LocationSelector location={initialLoc} onChange={vi.fn()} />);
 
-      const clearBtn = container.querySelector('.clear-btn')!;
-      expect(clearBtn).toBeTruthy();
+      // Own button between the field and refresh (#166).
+      const clearBtn = screen.getByRole('button', { name: 'Clear search' });
+      expect(clearBtn.closest('.search-input-wrapper')).toBeNull();
+      expect(clearBtn.closest('.location-controls-row')).toBe(
+        container.querySelector('.location-controls-row'),
+      );
       fireEvent.click(clearBtn);
+      expect((screen.getByPlaceholderText('Search location...') as HTMLInputElement).value).toBe('');
+      expect((clearBtn as HTMLButtonElement).disabled).toBe(true);
 
       await waitFor(() => {
-        expect(getTopSpy).toHaveBeenCalledWith(10);
+        expect(getTopSpy).toHaveBeenCalledWith(); // every stored location (#166)
         expect(screen.getByText('Vienna')).toBeTruthy();
+      });
+    });
+
+    describe('drop-down arrow (spec §16.5, #166)', () => {
+      // Backend order: selection count descending.
+      const topLocations: Location[] = [
+        { name: 'Vienna', latitude: 48.2082, longitude: 16.3738, elevation: 190 },
+        { name: 'Graz', latitude: 47.0707, longitude: 15.4395, elevation: 353 },
+        { name: 'Linz', latitude: 48.3069, longitude: 14.2858, elevation: 266 },
+      ];
+      const titles = (container: HTMLElement) =>
+        Array.from(container.querySelectorAll('.dropdown-item strong')).map(
+          (el) => el.textContent,
+        );
+
+      it('opens the most-used locations in count order although the field holds text', async () => {
+        const getTopSpy = vi
+          .spyOn(apiService, 'getMostUsedLocations')
+          .mockResolvedValue(topLocations);
+        const searchSpy = vi.spyOn(apiService, 'searchLocations');
+        const onChange = vi.fn();
+        vi.spyOn(apiService, 'recordLocationSelection').mockResolvedValue(true as any);
+        const { container } = render(
+          <LocationSelector location={initialLoc} onChange={onChange} />,
+        );
+        const input = screen.getByPlaceholderText('Search location...') as HTMLInputElement;
+        expect(input.value).not.toBe('');
+
+        const arrow = screen.getByRole('button', { name: 'Show most-used locations' });
+        expect(arrow.getAttribute('aria-expanded')).toBe('false');
+        fireEvent.click(arrow);
+
+        await waitFor(() => {
+          expect(titles(container)).toEqual(['Vienna', 'Graz', 'Linz']);
+        });
+        expect(getTopSpy).toHaveBeenCalledWith(); // every stored location (#166)
+        expect(searchSpy).not.toHaveBeenCalled();
+        expect(arrow.getAttribute('aria-expanded')).toBe('true');
+
+        // Selecting works as for search results.
+        fireEvent.click(screen.getByText('Graz'));
+        expect(onChange).toHaveBeenCalledWith(topLocations[1]);
+        expect(container.querySelector('.autocomplete-dropdown')).toBeNull();
+      });
+
+      it('closes on a second click and on Escape; Alt+ArrowDown opens it', async () => {
+        vi.spyOn(apiService, 'getMostUsedLocations').mockResolvedValue(topLocations);
+        const { container } = render(
+          <LocationSelector location={initialLoc} onChange={vi.fn()} />,
+        );
+        const arrow = screen.getByRole('button', { name: 'Show most-used locations' });
+        fireEvent.click(arrow);
+        await waitFor(() => expect(titles(container)).toHaveLength(3));
+        fireEvent.click(arrow);
+        expect(container.querySelector('.autocomplete-dropdown')).toBeNull();
+
+        const input = screen.getByPlaceholderText('Search location...');
+        fireEvent.keyDown(input, { key: 'ArrowDown', altKey: true });
+        await waitFor(() => expect(titles(container)).toHaveLength(3));
+        fireEvent.keyDown(input, { key: 'Escape' });
+        expect(container.querySelector('.autocomplete-dropdown')).toBeNull();
+      });
+
+      it('drops a pending search and notes an empty history', async () => {
+        vi.spyOn(apiService, 'getMostUsedLocations').mockResolvedValue([]);
+        const searchSpy = vi
+          .spyOn(apiService, 'searchLocations')
+          .mockResolvedValue([{ name: 'Bozen', latitude: 46.5, longitude: 11.35 }]);
+        const { container } = render(
+          <LocationSelector location={initialLoc} onChange={vi.fn()} />,
+        );
+        const input = screen.getByPlaceholderText('Search location...');
+        fireEvent.change(input, { target: { value: 'Boz' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Show most-used locations' }));
+        expect(await screen.findByText('No saved locations yet')).toBeTruthy();
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        // The search typed before the arrow click no longer fills the list.
+        expect(titles(container)).toEqual([]);
+        expect(searchSpy.mock.calls.length).toBeLessThanOrEqual(1);
+        expect(screen.getByText('No saved locations yet')).toBeTruthy();
       });
     });
 

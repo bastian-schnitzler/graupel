@@ -85,9 +85,10 @@ def test_explicit_paths_override_windows_default(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize("legacy_directory", ["meteo", "cumulus", "Cumulus"])
-def test_legacy_database_is_copied_once_without_losing_presets(
+def test_databases_of_old_application_names_are_ignored(
     monkeypatch, tmp_path, legacy_directory
 ):
+    # 0.2.0 no longer looks up Meteo/Cumulus databases (system.md §13).
     from graupel.data.storage import Storage
 
     monkeypatch.setattr(bridge.sys, "platform", "win32")
@@ -103,47 +104,14 @@ def test_legacy_database_is_copied_once_without_losing_presets(
         )
     )
     old.close()
+    legacy_bytes = legacy.read_bytes()
     api = bridge.API()
     try:
-        assert api.storage.read(config.id).name == "Legacy preset"
-        api.storage.delete(config.id)
+        assert api.storage.read(config.id) is None
+        assert api.storage.list_all() == []
     finally:
         api.storage.close()
-    reopened = bridge.API()
-    try:
-        assert reopened.storage.list_all() == []
-        assert legacy.is_file()
-    finally:
-        reopened.storage.close()
-
-
-def test_migration_recovers_from_stale_temporary_file(monkeypatch, tmp_path):
-    from graupel.data.storage import Storage
-
-    monkeypatch.setattr(bridge.sys, "platform", "win32")
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    legacy = tmp_path / "meteo" / "meteogram.db"
-    legacy.parent.mkdir()
-    old = Storage(str(legacy))
-    config = old.create(
-        MeteogramConfig(
-            name="Recovered preset",
-            location=Location(name="Berlin", latitude=52, longitude=13),
-            model_chain=[],
-        )
-    )
-    old.close()
-
-    stale_temp = tmp_path / "graupel" / "meteogram.migration.db"
-    stale_temp.parent.mkdir(parents=True, exist_ok=True)
-    stale_temp.write_text("corrupt stale file")
-
-    api = bridge.API()
-    try:
-        assert api.storage.read(config.id).name == "Recovered preset"
-        assert not stale_temp.exists()
-    finally:
-        api.storage.close()
+    assert legacy.read_bytes() == legacy_bytes
 
 
 def test_bridge_get_user_timezone(monkeypatch):

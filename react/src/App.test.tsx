@@ -6,12 +6,14 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import App from "./App";
 import { apiService as forecastApi } from "./services/apiService";
 import { apiService as locationApi } from "./services/apiService";
 import type { MeteogramConfig } from "./types";
+import { AUTO_CONFIG_ID } from "./utils/autoChain";
 
 describe("Meteogram App Full Integration", () => {
   beforeEach(() => {
@@ -158,16 +160,23 @@ describe("Meteogram App Full Integration", () => {
     ).toBe("Lausanne");
 
     fireEvent.click(screen.getByRole("button", { name: "Config" }));
-    await waitFor(() => expect(screen.getByText("2962 m a.s.l.")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getAllByText("2962 m a.s.l.").length).toBeGreaterThan(0),
+    );
     expect(headerMarker.coordinates).toEqual([
       zugspitze.longitude,
       zugspitze.latitude,
     ]);
+    // Config view: the header location is read only, no map picker (#175).
+    const mapCount = MockMap.instances.length;
     openFromMapLibre();
-    expectFullscreenAt(zugspitze);
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(MockMap.instances.length).toBe(mapCount);
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    expect(
+      (screen.getByPlaceholderText("Search location...") as HTMLInputElement)
+        .disabled,
+    ).toBe(true);
     expect(screen.getByText("Configuration Name")).toBeTruthy();
-    expect(screen.getByText("2962 m a.s.l.")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Meteo" }));
     await waitFor(() => expect(screen.getByText("453 m a.s.l.")).toBeTruthy());
@@ -193,7 +202,9 @@ describe("Meteogram App Full Integration", () => {
     expect(update).not.toHaveBeenCalled();
     expect(config.location).toEqual(zugspitze);
     fireEvent.click(screen.getByRole("button", { name: "Config" }));
-    await waitFor(() => expect(screen.getByText("2962 m a.s.l.")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getAllByText("2962 m a.s.l.").length).toBeGreaterThan(0),
+    );
     expect(headerMarker.coordinates).toEqual([
       zugspitze.longitude,
       zugspitze.latitude,
@@ -530,6 +541,98 @@ describe("Meteogram App Location State Management & Isolation", () => {
     });
   });
 
+  it("shows and edits the location display name of a configuration (#175)", async () => {
+    let stored: MeteogramConfig[] = [
+      { ...configA, location_name_override: "LSN" },
+      configB,
+    ];
+    vi.spyOn(forecastApi, "getConfigurations").mockImplementation(
+      async () => stored,
+    );
+    vi.spyOn(locationApi, "searchLocations").mockResolvedValue([
+      { name: "Mont Blanc", latitude: 45.8326, longitude: 6.8652 },
+    ]);
+    const save = vi
+      .spyOn(forecastApi, "saveConfiguration")
+      .mockImplementation(async (cfg) => {
+        stored = stored.map((c) => (c.id === cfg.id ? cfg : c));
+        return cfg;
+      });
+    render(<App />);
+
+    const header = () =>
+      screen.getByPlaceholderText("Search location...") as HTMLInputElement;
+    await waitFor(() => expect(header().value).toBe("LSN"));
+    const options = Array.from(
+      screen.getByTestId("config-select").querySelectorAll("option"),
+    ).map((option) => option.textContent);
+    expect(options).toContain("Config A (LSN)");
+    expect(options).toContain("Config B (Zermatt)");
+
+    fireEvent.click(screen.getByRole("button", { name: "Config" }));
+    const field = (await screen.findByPlaceholderText(
+      "Search configuration location...",
+    )) as HTMLInputElement;
+    expect(field.value).toBe("LSN");
+    expect(header().disabled).toBe(true);
+    expect(header().value).toBe("LSN");
+
+    // Pen: a new display name is saved and shown at once.
+    fireEvent.click(screen.getByTestId("config-location-name-btn"));
+    fireEvent.change(screen.getByTestId("config-location-name-input"), {
+      target: { value: "LAU" },
+    });
+    fireEvent.blur(screen.getByTestId("config-location-name-input"));
+    await waitFor(() =>
+      expect(save).toHaveBeenLastCalledWith(
+        expect.objectContaining({ location_name_override: "LAU" }),
+      ),
+    );
+    expect(field.value).toBe("LAU");
+    expect(header().value).toBe("LAU");
+
+    // A new place clears the display name.
+    fireEvent.change(field, { target: { value: "Mont" } });
+    const option = await within(await screen.findByRole("listbox")).findByRole(
+      "option",
+    );
+    fireEvent.click(option);
+    await waitFor(() =>
+      expect(save).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          location: expect.objectContaining({ name: "Mont Blanc" }),
+          location_name_override: null,
+        }),
+      ),
+    );
+    expect(field.value).toBe("Mont Blanc");
+    expect(header().value).toBe("Mont Blanc");
+  });
+
+  it("shows the configuration location only on the Model chains tab (#175)", async () => {
+    vi.spyOn(locationApi, "searchLocations").mockResolvedValue([
+      { name: "Mont Blanc", latitude: 45.8326, longitude: 6.8652 },
+    ]);
+    render(<App />);
+    const header = () =>
+      screen.getByPlaceholderText("Search location...") as HTMLInputElement;
+    await waitFor(() => expect(header().value).toBe("Lausanne"));
+
+    fireEvent.change(header(), { target: { value: "Mont" } });
+    const option = await within(await screen.findByRole("listbox")).findByRole(
+      "option",
+    );
+    fireEvent.click(option);
+    await waitFor(() => expect(header().value).toBe("Mont Blanc"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Config" }));
+    await waitFor(() => expect(header().value).toBe("Lausanne"));
+    expect(header().disabled).toBe(true);
+    fireEvent.click(screen.getByRole("tab", { name: "Basic" }));
+    await waitFor(() => expect(header().value).toBe("Mont Blanc"));
+    expect(header().disabled).toBe(true);
+  });
+
   it("retains elevation above map view when selecting a location with elevation in Configuration View", async () => {
     vi.spyOn(locationApi, "searchLocations").mockResolvedValue([
       {
@@ -561,19 +664,30 @@ describe("Meteogram App Location State Management & Isolation", () => {
       expect(screen.queryByText("DEFAULT LOCATION")).toBeNull();
     });
 
-    // Search and select Zermatt with elevation 1620
-    const searchInput = screen.getByPlaceholderText("Search location...");
+    // Search and select Zermatt with elevation 1620 in the configuration's
+    // own location field (the header field is read only, #175).
+    const searchInput = await screen.findByPlaceholderText(
+      "Search configuration location...",
+    );
     fireEvent.change(searchInput, { target: { value: "Zermatt" } });
 
-    const option = await screen.findByRole("option");
+    // The Config view also has <option>s (layout select, #199).
+    const option = await within(await screen.findByRole("listbox")).findByRole(
+      "option",
+    );
     expect(option.textContent).toContain("1620 m a.s.l.");
     fireEvent.click(option);
 
-    // Above the map view, elevation must display 1620 m a.s.l. and NOT Elevation unavailable
+    // Header and configuration field show 1620 m a.s.l., NOT Elevation
+    // unavailable, right away (former bug #164).
     await waitFor(() => {
-      expect(screen.getByText("1620 m a.s.l.")).toBeTruthy();
+      expect(screen.getAllByText("1620 m a.s.l.")).toHaveLength(2);
       expect(screen.queryByText("Elevation unavailable")).toBeNull();
     });
+    expect(
+      (screen.getByPlaceholderText("Search location...") as HTMLInputElement)
+        .value,
+    ).toBe("Zermatt");
   });
 
   it("does not enter an infinite re-render / fetch loop on startup", async () => {
@@ -631,17 +745,18 @@ describe("Meteogram App Location State Management & Isolation", () => {
       "cfg-top",
     );
 
-    // Verify dropdown contains options in exact canonical order [cfgTop, cfgBottom]
+    // Auto first (system.md §16.4), then the canonical order [cfgTop, cfgBottom]
     const dropdown = container.querySelector(
       ".config-select-dropdown",
     ) as HTMLSelectElement;
     expect(dropdown).toBeTruthy();
     const options = Array.from(dropdown.options);
-    expect(options[0].value).toBe("cfg-top");
-    expect(options[1].value).toBe("cfg-bottom");
+    expect(options[0].value).toBe(AUTO_CONFIG_ID);
+    expect(options[1].value).toBe("cfg-top");
+    expect(options[2].value).toBe("cfg-bottom");
   });
 
-  it("only reloads forecast on switching back from Configuration View if selected configuration changed", async () => {
+  it("does not reload forecast on switching back from Configuration View after a rename", async () => {
     const initialConfig = {
       id: "cfg-test",
       name: "Editable Config",
@@ -700,10 +815,12 @@ describe("Meteogram App Location State Management & Isolation", () => {
     // Switch back to Meteogram View
     fireEvent.click(screen.getByRole("button", { name: "Meteo" }));
 
-    // Meteogram View must reload forecast because config changed
+    // A rename keeps the chains, so the session cache serves it (#177).
     await waitFor(() => {
-      expect(forecastSpy.mock.calls.length).toBeGreaterThan(initialFetchCount);
+      expect(screen.queryByText("Configuration Name")).toBeNull();
     });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(forecastSpy.mock.calls.length).toBe(initialFetchCount);
   });
 
   it("skips configuration with empty model chain on startup and loads first runnable dropdown entry", async () => {
@@ -887,11 +1004,6 @@ describe("Meteogram App Location State Management & Isolation", () => {
 
     // 4. Switch back to Meteogram View
     fireEvent.click(screen.getByRole("button", { name: "Meteo" }));
-
-    // Meteogram data must be refetched and reloaded
-    await waitFor(() => {
-      expect(forecastSpy.mock.calls.length).toBeGreaterThan(initialFetchCount);
-    });
 
     // Ephemeral slider positions must be discarded, restoring the preset (48h)
     await waitFor(() => {
@@ -1118,5 +1230,125 @@ describe("Meteogram App Location State Management & Isolation", () => {
 
     expect(screen.queryByText(/Error Loading Forecast/i)).toBeNull();
     expect(screen.queryByText(/Offenbach/i)).toBeNull();
+  });
+});
+
+describe("Meteogram reload consistency", () => {
+  const configA: MeteogramConfig = {
+    id: "cfg-a",
+    name: "Config A",
+    location: { name: "Lausanne", latitude: 46.5197, longitude: 6.6323 },
+    model_chain: [
+      { name: "ICON-D2", max_forecast_horizon_hours: 48 },
+      { name: "ICON-EU", max_forecast_horizon_hours: 120 },
+    ],
+  };
+  const configB: MeteogramConfig = {
+    id: "cfg-b",
+    name: "Config B",
+    location: { name: "Zermatt", latitude: 46.0207, longitude: 7.7491 },
+    model_chain: [{ name: "ICON-EU", max_forecast_horizon_hours: 120 }],
+  };
+
+  type Gate = { release: () => void; fail: (error: Error) => void };
+
+  const setup = () => {
+    localStorage.clear();
+    delete window.pywebview;
+    vi.restoreAllMocks();
+    vi.spyOn(locationApi, "getElevationForCoords").mockResolvedValue(1000);
+    vi.spyOn(forecastApi, "getConfigurations").mockResolvedValue([
+      configA,
+      configB,
+    ]);
+    const realGetForecast = forecastApi.getForecast.bind(forecastApi);
+    const gates: Gate[] = [];
+    let gateNextCall = false;
+    const getForecast = vi
+      .spyOn(forecastApi, "getForecast")
+      .mockImplementation(async (loc, configId, variables) => {
+        if (gateNextCall) {
+          gateNextCall = false;
+          await new Promise<void>((resolve, reject) => {
+            gates.push({ release: resolve, fail: reject });
+          });
+        }
+        return realGetForecast(loc, configId, variables);
+      });
+    return {
+      getForecast,
+      gates,
+      gateNext: () => {
+        gateNextCall = true;
+      },
+    };
+  };
+
+  const chartViewport = () =>
+    document.querySelector('[data-testid="meteogram-chart-viewport"]');
+
+  it("empties the meteogram while a switched configuration loads and fills it only with the new forecast", async () => {
+    const { gates, gateNext } = setup();
+    const { container } = render(<App />);
+    await waitFor(() => expect(chartViewport()).toBeTruthy());
+
+    gateNext();
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "cfg-b" },
+    });
+
+    // The previous configuration's chart is gone immediately.
+    expect(chartViewport()).toBeNull();
+    expect(container.querySelector(".loading-state")).toBeTruthy();
+
+    await waitFor(() => expect(gates.length).toBe(1));
+    await act(async () => {
+      gates[0].release();
+    });
+    await waitFor(() => expect(chartViewport()).toBeTruthy());
+    expect(container.querySelector(".loading-state")).toBeNull();
+  });
+
+  it("shows no previous forecast when loading the new selection fails", async () => {
+    const { gates, gateNext } = setup();
+    const { container } = render(<App />);
+    await waitFor(() => expect(chartViewport()).toBeTruthy());
+
+    gateNext();
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "cfg-b" },
+    });
+    await waitFor(() => expect(gates.length).toBe(1));
+    await act(async () => {
+      gates[0].fail(new Error("API down"));
+    });
+
+    await waitFor(() =>
+      expect(container.querySelector(".status-banner.error")).toBeTruthy(),
+    );
+    expect(chartViewport()).toBeNull();
+  });
+
+  it("keeps model chains collapsed across configuration switches and reloads", async () => {
+    setup();
+    render(<App />);
+    await waitFor(() => expect(chartViewport()).toBeTruthy());
+
+    const collapseButtons = screen.getAllByRole("button", {
+      name: "Collapse model chain",
+    });
+    expect(collapseButtons.length).toBe(2);
+    fireEvent.click(collapseButtons[0]);
+    expect(
+      screen.getAllByRole("button", { name: "Expand model chain" }).length,
+    ).toBe(1);
+
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "cfg-b" },
+    });
+    await waitFor(() => expect(chartViewport()).toBeTruthy());
+    expect(
+      screen.getAllByRole("button", { name: "Expand model chain" }).length,
+    ).toBe(1);
   });
 });

@@ -252,3 +252,19 @@ def test_location_history_recording_and_ranking(storage):
     assert len(top_after) == 2
     assert [loc.name for loc in top_after] == ["Berlin Center", "Hamburg"]
 
+
+
+def test_most_used_locations_are_unlimited_by_default():
+    # The location drop-down lists every stored location (#166).
+    storage = Storage(":memory:")
+    try:
+        for i in range(15):
+            loc = Location(name=f"Place {i}", latitude=40 + i, longitude=10)
+            for _ in range(i + 1):
+                storage.record_location_selection(loc)
+        names = [loc.name for loc in storage.get_most_used_locations()]
+        assert names == [f"Place {i}" for i in range(14, -1, -1)]
+        assert len(storage.get_most_used_locations(3)) == 3
+        assert len(storage.get_most_used_locations(None)) == 15
+    finally:
+        storage.close()

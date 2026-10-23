@@ -34,6 +34,26 @@ describe("MeteogramModelChains Component", () => {
     expect(screen.getByText("ECMWF IFS 0.25°")).toBeTruthy();
   });
 
+  it("shortens the labels to M and C when the chains are collapsed", () => {
+    render(
+      <MeteogramModelChains
+        activeModelChain={mainChain}
+        activeCloudModelChain={cloudChain}
+        availableModels={{}}
+        isMainChainCollapsed
+        isCloudChainCollapsed
+        onModelChainChange={vi.fn()}
+        onModelChainResizeEnd={vi.fn()}
+        onCloudModelChainChange={vi.fn()}
+        onCloudModelChainResizeEnd={vi.fn()}
+        onCloudBoundaryDrag={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("border-label-meteo").textContent).toBe("M");
+    expect(screen.getByTestId("border-label-clouds").textContent).toBe("C");
+  });
+
   it("omits CLOUDS builder when cloud model chain is empty", () => {
     render(
       <MeteogramModelChains
