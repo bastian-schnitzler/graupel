@@ -1,0 +1,977 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Day slider (REQ-436): day cards and the marker over the selected days, without a whole-period button (REQ-640: a
+ * double click selects the whole period). The cards share one row of equal columns that always fits the width, without
+ * a scroll bar (REQ-446); narrow cards switch to shorter labels through container queries on each card.
+ *
+ * Its own card like a model chain card (REQ-499, ModelChain.css `.model-chain-row`, `.model-card`): the label
+ * "Horizon" up the left edge, the day cards side by side with a bar on top, a bold name and the date below it, as
+ * plain text (REQ-505); only today's date keeps its orange badge.
+ */
+.day-slider-card {
+  --day-label-width: 1.25rem;
+  --day-today: var(--color-today);
+  --day-today-text: #000000;
+  /* The selection in grey, so it does not stand out too much (REQ-513): background, bars, frame and grips. */
+  --day-selected-bg: #e9ecef;
+  --day-marker: #8c949e;
+  --day-grip-mark: #ffffff;
+  /* Width of the marker's edge grips, inside its frame. */
+  --day-grip: 0.625rem;
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  /* Room for the label "Horizon" running up the left edge. */
+  min-height: 5rem;
+  padding-left: var(--day-label-width);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-surface);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .day-slider-card {
+    --day-today-text: #000000;
+    --day-selected-bg: #2b333d;
+    --day-marker: #7d8794;
+  }
+}
+
+:root[data-theme="dark"] .day-slider-card {
+  --day-today-text: #000000;
+  --day-selected-bg: #2b333d;
+  --day-marker: #7d8794;
+}
+
+/* The label like the model chain's "Weather" and "Clouds". */
+.day-slider-card__label {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--day-label-width);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
+  pointer-events: none;
+}
+
+.day-slider {
+  container: day-slider / inline-size;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.day-slider__track {
+  position: relative;
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(var(--day-count), minmax(0, 1fr));
+}
+
+/* Place and elevation between the grips, on phones only (REQ-562). */
+.day-slider__caption {
+  display: none;
+}
+
+/* Day cards look like model cards and are equally large. */
+.day-card {
+  /* Each card is a container, so its labels follow its width; it adds no minimum width to its column. */
+  container: day-card / inline-size;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  box-sizing: border-box;
+  min-width: 0;
+  /*
+   * A double tap selects the whole period instead of zooming (REQ-485); a sideways drag marks days instead of
+   * panning (REQ-490), while the page still scrolls up and down and can be pinch-zoomed.
+   */
+  touch-action: pan-y pinch-zoom;
+  user-select: none;
+  -webkit-user-select: none;
+  margin: 0;
+  padding: var(--space-2) var(--space-1);
+  font: inherit;
+  line-height: 1.25;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 0;
+  border-top: 0.25rem solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+  border-radius: 0;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+/*
+ * A card under the mouse lights up, in the wide slider only and only with a pointer that can hover (REQ-598): iOS
+ * Safari keeps a tapped card under :hover until the next tap elsewhere, and on the phone's strip any hover look over a
+ * selected day would replace its fill, leaving its white label on the white strip (one white day after a double tap).
+ */
+@media (hover: hover) {
+  @container day-slider (width >= 40rem) {
+    .day-card:hover {
+      background: var(--day-selected-bg);
+    }
+  }
+}
+
+/*
+ * The weekday like a model's name. Long labels shrink with the scale the slider measured for the labels of the page's
+ * language (REQ-520, `--day-weekday-scale` and `--day-date-scale`, at most 1).
+ */
+.day-card__weekday {
+  max-width: 100%;
+  font-size: calc(var(--font-size-sm) * var(--day-weekday-scale, 1));
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* The date as plain text (REQ-505). */
+.day-card__date {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 0.125rem;
+  font-size: calc(0.78rem * var(--day-date-scale, 1));
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+}
+
+.day-card__short {
+  display: none;
+}
+
+/*
+ * The weekday of the short labels has two letters in every language (REQ-626). As large as the weekday around it,
+ * smaller only where its two letters would not fit the card: at most the card's inner width divided by their width in
+ * em (`--day-letters-em`, measured by the slider for each day). The day of the month below keeps its size.
+ */
+.day-card__weekday .day-card__short {
+  font-size: min(1em, 100cqi / var(--day-letters-em, 1));
+}
+
+/*
+ * Hidden copies of the long labels at full size: the slider measures them to decide whether the long labels fit
+ * (REQ-520). Same fonts as the labels above, with the date's least padding.
+ */
+/*
+ * The hidden copies take no room: no width either, so they do not reach beyond the page's right edge, which Safari would
+ * scroll the page to (only the spans' own widths are measured).
+ */
+.day-slider__measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.day-slider__measure > span {
+  display: inline-block;
+}
+
+.day-slider__measure-weekday {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.day-slider__measure-date {
+  padding-inline: 0.125rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The two-letter weekdays of the short labels in their font (REQ-626); measured in em, so only the font counts. */
+.day-slider__measure-letters {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.day-card--selected {
+  background: var(--day-selected-bg);
+  border-top-color: var(--day-marker);
+}
+
+.day-card--today {
+  border-top-color: var(--day-today);
+}
+
+.day-card--today .day-card__date {
+  /* The badge's padding takes what room the card leaves beside the date. */
+  padding-inline: clamp(0.125rem, (100cqi - var(--day-date-text, 0px)) / 2, var(--space-2));
+  color: var(--day-today-text);
+  background: var(--day-today);
+}
+
+/*
+ * The long labels of the page's language do not fit (REQ-520, measured by the slider, so French "mar" switches
+ * earlier than German "Di"): the weekday's first two letters (REQ-626) and the day of the month, scaled to the card.
+ */
+.day-slider--short .day-card__long {
+  display: none;
+}
+
+.day-slider--short .day-card__short {
+  display: inline;
+}
+
+.day-slider--short .day-card__weekday {
+  font-size: min(var(--font-size-sm), 80cqi);
+}
+
+.day-slider--short .day-card__date {
+  padding-inline: 0.125rem;
+  font-size: min(0.78rem, 60cqi);
+}
+
+/*
+ * Today's bar drawn again above the marker (REQ-502): the frame's edge would otherwise cover it when today is
+ * selected. It sits where the card's top border is and lets every pointer through.
+ */
+.day-slider__today-bar {
+  grid-row: 1;
+  align-self: start;
+  position: relative;
+  z-index: 2;
+  height: 0.25rem;
+  margin-right: 1px;
+  background: var(--day-today);
+  pointer-events: none;
+}
+
+/* Frame over the selected days; its edges and its body are dragged. */
+.day-slider__marker {
+  grid-row: 1;
+  grid-column: var(--marker-start) / var(--marker-end);
+  position: relative;
+  z-index: 1;
+  display: flex;
+  border: 2px solid var(--day-marker);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+
+.day-slider__body {
+  flex: 1 1 auto;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+.day-slider__marker--whole {
+  grid-column: 1 / -1;
+}
+
+.day-slider__marker--whole .day-slider__body {
+  cursor: pointer;
+  /*
+   * Nothing to move: the page keeps scrolling up and down on touch, a sideways drag marks days (REQ-490) and a double
+   * tap does not zoom (REQ-485).
+   */
+  touch-action: pan-y pinch-zoom;
+}
+
+.day-slider__marker--dragging .day-slider__body {
+  cursor: grabbing;
+}
+
+/* Edge grips inside the frame, like the grip of a model chain boundary. */
+.day-slider__handle {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 var(--day-grip);
+  align-self: center;
+  height: 60%;
+  min-height: 1.75rem;
+  pointer-events: auto;
+  cursor: ew-resize;
+  touch-action: none;
+  background:
+    radial-gradient(circle, var(--day-grip-mark) 1.5px, transparent 2px) center / 0.5rem 0.4rem repeat-y,
+    var(--day-marker);
+  border-radius: var(--radius-sm);
+}
+
+/* Each grip straddles the frame, so it covers little of the cards' labels. */
+.day-slider__handle--start {
+  margin-left: calc(var(--day-grip) / -2 - 1px);
+}
+
+.day-slider__handle--end {
+  margin-right: calc(var(--day-grip) / -2 - 1px);
+}
+
+/* The last day ends the card, as the whole-period button did before (REQ-640). */
+@container day-slider (width >= 40rem) {
+  .day-card:last-of-type {
+    border-right: 0;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  }
+}
+
+.day-slider__empty {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  background: var(--color-surface);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+/*
+ * "Loading forecast…" (REQ-737): the one message of a load on the page, with a turning refresh symbol before it. At the
+ * first load it stands in the empty box above; while a reload runs the same box lies over the days, so nothing moves.
+ * While the chart is pulled down (usePullToRefresh.ts sets `data-meteogram-pull` and `--meteogram-pull-progress` on
+ * the root) the box shows only the symbol, appearing and turning with the pull, instead of an arrow over the chart.
+ */
+.day-slider__loading-message {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.day-slider__loading-icon {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--color-accent);
+  animation: day-slider-loading-turn 0.9s linear infinite;
+}
+
+.day-slider__loading {
+  position: relative;
+  z-index: 5;
+  grid-row: 1;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 0 var(--space-4);
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  background: var(--color-surface);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.day-slider__loading[data-loading] {
+  visibility: visible;
+  /* The days below cannot be tapped while they load anew. */
+  pointer-events: auto;
+}
+
+/* The marker's grips would peek out beside the box or below it. */
+.day-slider__track:has(> .day-slider__loading[data-loading]) .day-slider__marker {
+  visibility: hidden;
+}
+
+/* Before the release only the symbol, turned and shown as far as the pull has come. */
+html[data-meteogram-pull] .day-slider__loading:not([data-loading]) {
+  visibility: visible;
+  opacity: var(--meteogram-pull-progress, 0);
+}
+
+.day-slider__loading:not([data-loading]) .day-slider__loading-icon {
+  transform: rotate(calc(var(--meteogram-pull-progress, 0) * 360deg));
+  animation: none;
+}
+
+/* On phones over the strip, as round as it is (REQ-548). */
+@container day-slider (width < 40rem) {
+  .day-slider__loading {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+  }
+}
+
+/* Tablet (REQ-728, REQ-742): the same rules by the class, without style queries. */
+:where(.app--tablet) .day-slider__loading {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+@keyframes day-slider-loading-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .day-slider__loading-icon,
+  .day-slider__loading:not([data-loading]) .day-slider__loading-icon {
+    transform: none;
+    animation: none;
+  }
+}
+
+/*
+ * Phones (REQ-458): the cards form a compact strip and the marker's edges get grips below the strip with a touch area
+ * of at least 44 px (2.75rem) each. No selected period in words (REQ-528); a double tap on a day (REQ-485) or a drag
+ * across all days selects the whole period. Tablets too, whatever the slider's width (REQ-728, REQ-742: the rules
+ * under `.app--tablet` that follow).
+ */
+@container day-slider (width < 40rem) {
+  .day-slider__track {
+    --grip-width: 1.5rem;
+    --grip-height: 1.375rem;
+    --grip-hit: 2.75rem;
+    grid-template-columns: repeat(var(--day-count), minmax(0, 1fr));
+    /*
+     * Room for the grips below the strip, which stay within its width (REQ-555); the slider ends with their row, so the
+     * meteogram follows as closely as the strip follows the place row (REQ-607).
+     */
+    padding: 0 0 1rem;
+  }
+
+  .day-card {
+    padding: var(--space-2) 0;
+  }
+
+  /* Long labels at the phone's sizes, scaled to fit (REQ-520); the measured copies use the same sizes. */
+  .day-slider__track .day-card__weekday {
+    font-size: calc(0.6875rem * var(--day-weekday-scale, 1));
+  }
+
+  .day-slider__track .day-card__date {
+    font-size: calc(0.8125rem * var(--day-date-scale, 1));
+  }
+
+  .day-slider__measure-weekday {
+    font-size: 0.6875rem;
+  }
+
+  .day-slider__measure-date {
+    font-size: 0.8125rem;
+  }
+
+  .day-slider__measure-letters {
+    font-size: 0.6875rem;
+    font-weight: 600;
+  }
+
+  .day-slider--short .day-card__weekday {
+    font-size: 0.6875rem;
+  }
+
+  .day-slider--short .day-card__date {
+    font-size: min(0.8125rem, 70cqi);
+  }
+
+  /*
+   * The grips hang below the frame, inside the selection: the outer side of each is flush with the outer edge of the
+   * first or last selected day (REQ-555), so they never stand out beyond the strip. On a one-day selection each takes
+   * half the day, so they do not cover each other. Their touch area is larger than they are, centred on them. The
+   * frame's 2px border lies inside the marker's box.
+   */
+  .day-slider__handle {
+    position: absolute;
+    top: calc(100% - 0.25rem);
+    width: min(var(--grip-width), 50% + 2px);
+    height: var(--grip-height);
+    min-height: 0;
+    margin: 0;
+    background:
+      linear-gradient(var(--day-grip-mark), var(--day-grip-mark)) center / 2px 45% no-repeat,
+      var(--day-marker);
+    border-radius: 999px;
+    box-shadow: var(--shadow-surface);
+  }
+
+  .day-slider__handle::after {
+    content: "";
+    position: absolute;
+    top: calc((var(--grip-hit) - var(--grip-height)) / -2);
+    left: calc((100% - var(--grip-hit)) / 2);
+    width: var(--grip-hit);
+    height: var(--grip-hit);
+  }
+
+  .day-slider__handle--start {
+    left: -2px;
+  }
+
+  .day-slider__handle--end {
+    right: -2px;
+  }
+
+  /*
+   * Place and elevation (REQ-562): centred across the strip and in the row of the grips, as large as in the meteogram's
+   * label row; below the grips, which may pass over it.
+   */
+  .day-slider__caption {
+    position: absolute;
+    top: calc(100% - 0.75rem - 2px);
+    right: 0;
+    left: 0;
+    display: block;
+    overflow: hidden;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    line-height: 0.875rem;
+    text-align: center;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+
+  /*
+   * REQ-548: the strip is one rounded surface; each day shows its weekday's abbreviation (its first two letters where
+   * that does not fit, REQ-626) over the day of the month, both centred in the column. Proportional digits, so a narrow
+   * "1" sits in the middle like the other digits.
+   */
+  .day-slider__track::before {
+    content: "";
+    grid-row: 1;
+    grid-column: 1 / -1;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+  }
+
+  .day-slider__track .day-card {
+    gap: 0.125rem;
+    background: transparent;
+    border: 0;
+    text-align: center;
+  }
+
+  .day-slider__track .day-card__weekday,
+  .day-slider__track .day-card__date {
+    padding: 0;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    font-variant-numeric: proportional-nums;
+    letter-spacing: 0;
+    line-height: 1.15;
+    text-align: center;
+    color: var(--color-text-muted);
+    background: none;
+  }
+
+  .day-slider__track .day-card__date {
+    font-size: min(0.875rem, 70cqi);
+    font-weight: 700;
+    color: var(--color-text);
+  }
+
+  .day-slider__track .day-card__weekday .day-card__long,
+  .day-slider__track .day-card__date .day-card__short {
+    display: inline;
+  }
+
+  .day-slider__track .day-card__weekday .day-card__short,
+  .day-slider__track .day-card__date .day-card__long,
+  .day-slider--narrow-weekday .day-card__weekday .day-card__long {
+    display: none;
+  }
+
+  .day-slider--narrow-weekday .day-card__weekday .day-card__short {
+    display: inline;
+  }
+
+  /* Today in its colour, without a badge or bar (REQ-548, REQ-559). */
+  .day-slider__track .day-card--today .day-card__weekday,
+  .day-slider__track .day-card--today .day-card__date {
+    color: var(--day-today);
+  }
+
+  .day-slider__today-bar {
+    display: none;
+  }
+
+  /* The selected days as one filled area in the accent colour, rounded at its ends. */
+  .day-slider__track .day-card--selected {
+    background: var(--color-accent);
+  }
+
+  .day-slider__track .day-card--selected .day-card__weekday,
+  .day-slider__track .day-card--selected .day-card__date {
+    color: var(--color-accent-contrast);
+  }
+
+  /* Today's weekday of at most two letters as large as the date (REQ-565). */
+  .day-slider__track .day-card--large-weekday .day-card__weekday {
+    font-size: min(0.875rem, 70cqi);
+    /* The line as high as the other weekdays' (0.6875rem × 1.15), so the strip keeps its height. */
+    line-height: 0.790625rem;
+  }
+
+  /* Today keeps its colour inside the selection too, without an underline (REQ-559). */
+  .day-slider__track .day-card--today.day-card--selected .day-card__weekday,
+  .day-slider__track .day-card--today.day-card--selected .day-card__date {
+    color: var(--day-today);
+  }
+
+  .day-slider__track .day-card--first {
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+  }
+
+  .day-slider__track .day-card--last {
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  }
+
+  .day-slider__track .day-card--first.day-card--last {
+    border-radius: var(--radius-md);
+  }
+
+  .day-slider__marker {
+    border-color: transparent;
+  }
+
+  /* The grips as tabs in the accent colour with three grooves, hanging below the strip. */
+  .day-slider__track .day-slider__handle {
+    --grip-height: 0.875rem;
+    top: calc(100% + 0.25rem);
+    background:
+      linear-gradient(
+          90deg,
+          transparent 30%,
+          var(--color-accent-contrast) 30% 36%,
+          transparent 36% 47%,
+          var(--color-accent-contrast) 47% 53%,
+          transparent 53% 64%,
+          var(--color-accent-contrast) 64% 70%,
+          transparent 70%
+        )
+        center / 100% 0.375rem no-repeat,
+      var(--color-accent);
+    border-radius: 0.1875rem 0.1875rem 0.4375rem 0.4375rem;
+  }
+}
+
+/* Tablet (REQ-728, REQ-742): the same rules by the class, without style queries. */
+:where(.app--tablet) .day-slider__track {
+  --grip-width: 1.5rem;
+  --grip-height: 1.375rem;
+  --grip-hit: 2.75rem;
+  grid-template-columns: repeat(var(--day-count), minmax(0, 1fr));
+  /*
+   * Room for the grips below the strip, which stay within its width (REQ-555); the slider ends with their row, so the
+   * meteogram follows as closely as the strip follows the place row (REQ-607).
+   */
+  padding: 0 0 1rem;
+}
+
+:where(.app--tablet) .day-card {
+  padding: var(--space-2) 0;
+}
+
+/* Long labels at the phone's sizes, scaled to fit (REQ-520); the measured copies use the same sizes. */
+:where(.app--tablet) .day-slider__track .day-card__weekday {
+  font-size: calc(0.6875rem * var(--day-weekday-scale, 1));
+}
+
+:where(.app--tablet) .day-slider__track .day-card__date {
+  font-size: calc(0.8125rem * var(--day-date-scale, 1));
+}
+
+:where(.app--tablet) .day-slider__measure-weekday {
+  font-size: 0.6875rem;
+}
+
+:where(.app--tablet) .day-slider__measure-date {
+  font-size: 0.8125rem;
+}
+
+:where(.app--tablet) .day-slider__measure-letters {
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+:where(.app--tablet) .day-slider--short .day-card__weekday {
+  font-size: 0.6875rem;
+}
+
+:where(.app--tablet) .day-slider--short .day-card__date {
+  font-size: min(0.8125rem, 70cqi);
+}
+
+/*
+ * The grips hang below the frame, inside the selection: the outer side of each is flush with the outer edge of the
+ * first or last selected day (REQ-555), so they never stand out beyond the strip. On a one-day selection each takes
+ * half the day, so they do not cover each other. Their touch area is larger than they are, centred on them. The
+ * frame's 2px border lies inside the marker's box.
+ */
+:where(.app--tablet) .day-slider__handle {
+  position: absolute;
+  top: calc(100% - 0.25rem);
+  width: min(var(--grip-width), 50% + 2px);
+  height: var(--grip-height);
+  min-height: 0;
+  margin: 0;
+  background:
+    linear-gradient(var(--day-grip-mark), var(--day-grip-mark)) center / 2px 45% no-repeat,
+    var(--day-marker);
+  border-radius: 999px;
+  box-shadow: var(--shadow-surface);
+}
+
+:where(.app--tablet) .day-slider__handle::after {
+  content: "";
+  position: absolute;
+  top: calc((var(--grip-hit) - var(--grip-height)) / -2);
+  left: calc((100% - var(--grip-hit)) / 2);
+  width: var(--grip-hit);
+  height: var(--grip-hit);
+}
+
+:where(.app--tablet) .day-slider__handle--start {
+  left: -2px;
+}
+
+:where(.app--tablet) .day-slider__handle--end {
+  right: -2px;
+}
+
+/*
+ * Place and elevation (REQ-562): centred across the strip and in the row of the grips, as large as in the meteogram's
+ * label row; below the grips, which may pass over it.
+ */
+:where(.app--tablet) .day-slider__caption {
+  position: absolute;
+  top: calc(100% - 0.75rem - 2px);
+  right: 0;
+  left: 0;
+  display: block;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 0.875rem;
+  text-align: center;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/*
+ * REQ-548: the strip is one rounded surface; each day shows its weekday's abbreviation (its first two letters where
+ * that does not fit, REQ-626) over the day of the month, both centred in the column. Proportional digits, so a narrow
+ * "1" sits in the middle like the other digits.
+ */
+:where(.app--tablet) .day-slider__track::before {
+  content: "";
+  grid-row: 1;
+  grid-column: 1 / -1;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+:where(.app--tablet) .day-slider__track .day-card {
+  gap: 0.125rem;
+  background: transparent;
+  border: 0;
+  text-align: center;
+}
+
+:where(.app--tablet) .day-slider__track .day-card__weekday,
+:where(.app--tablet) .day-slider__track .day-card__date {
+  padding: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-variant-numeric: proportional-nums;
+  letter-spacing: 0;
+  line-height: 1.15;
+  text-align: center;
+  color: var(--color-text-muted);
+  background: none;
+}
+
+:where(.app--tablet) .day-slider__track .day-card__date {
+  font-size: min(0.875rem, 70cqi);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+:where(.app--tablet) .day-slider__track .day-card__weekday .day-card__long,
+:where(.app--tablet) .day-slider__track .day-card__date .day-card__short {
+  display: inline;
+}
+
+:where(.app--tablet) .day-slider__track .day-card__weekday .day-card__short,
+:where(.app--tablet) .day-slider__track .day-card__date .day-card__long,
+:where(.app--tablet) .day-slider--narrow-weekday .day-card__weekday .day-card__long {
+  display: none;
+}
+
+:where(.app--tablet) .day-slider--narrow-weekday .day-card__weekday .day-card__short {
+  display: inline;
+}
+
+/* Today in its colour, without a badge or bar (REQ-548, REQ-559). */
+:where(.app--tablet) .day-slider__track .day-card--today .day-card__weekday,
+:where(.app--tablet) .day-slider__track .day-card--today .day-card__date {
+  color: var(--day-today);
+}
+
+:where(.app--tablet) .day-slider__today-bar {
+  display: none;
+}
+
+/* The selected days as one filled area in the accent colour, rounded at its ends. */
+:where(.app--tablet) .day-slider__track .day-card--selected {
+  background: var(--color-accent);
+}
+
+:where(.app--tablet) .day-slider__track .day-card--selected .day-card__weekday,
+:where(.app--tablet) .day-slider__track .day-card--selected .day-card__date {
+  color: var(--color-accent-contrast);
+}
+
+/* Today's weekday of at most two letters as large as the date (REQ-565). */
+:where(.app--tablet) .day-slider__track .day-card--large-weekday .day-card__weekday {
+  font-size: min(0.875rem, 70cqi);
+  /* The line as high as the other weekdays' (0.6875rem × 1.15), so the strip keeps its height. */
+  line-height: 0.790625rem;
+}
+
+/* Today keeps its colour inside the selection too, without an underline (REQ-559). */
+:where(.app--tablet) .day-slider__track .day-card--today.day-card--selected .day-card__weekday,
+:where(.app--tablet) .day-slider__track .day-card--today.day-card--selected .day-card__date {
+  color: var(--day-today);
+}
+
+:where(.app--tablet) .day-slider__track .day-card--first {
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+:where(.app--tablet) .day-slider__track .day-card--last {
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+:where(.app--tablet) .day-slider__track .day-card--first.day-card--last {
+  border-radius: var(--radius-md);
+}
+
+:where(.app--tablet) .day-slider__marker {
+  border-color: transparent;
+}
+
+/* The grips as tabs in the accent colour with three grooves, hanging below the strip. */
+:where(.app--tablet) .day-slider__track .day-slider__handle {
+  --grip-height: 0.875rem;
+  top: calc(100% + 0.25rem);
+  background:
+    linear-gradient(
+        90deg,
+        transparent 30%,
+        var(--color-accent-contrast) 30% 36%,
+        transparent 36% 47%,
+        var(--color-accent-contrast) 47% 53%,
+        transparent 53% 64%,
+        var(--color-accent-contrast) 64% 70%,
+        transparent 70%
+      )
+      center / 100% 0.375rem no-repeat,
+    var(--color-accent);
+  border-radius: 0.1875rem 0.1875rem 0.4375rem 0.4375rem;
+}
+
+/*
+ * Phones (REQ-529): no card around the slider and no label "Horizon"; the strip stands on the page like the model
+ * chains above it, from the top card's left edge to its right edge (REQ-540).
+ */
+@container app (max-width: 40rem) {
+  .day-slider-card {
+    min-height: 0;
+    padding-left: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .day-slider-card__label {
+    display: none;
+  }
+
+  /*
+   * REQ-607, REQ-615: as much room from the place row (or the chains) to the strip as from the row of the grips to the
+   * meteogram's first row, 10 instead of the page's 12 px: the slider takes 2 px of the gap back above and below it.
+   * The chart moves up by the room above its model headers itself (MeteogramPanel.css, `--meteogram-top-room`), so
+   * with or without them its first row, model header or day row, starts that far below the grips.
+   */
+  .day-slider-card {
+    --day-slider-gap: 0.625rem;
+    margin-block: calc(var(--day-slider-gap) - var(--space-3));
+  }
+}
+
+/* Tablet (REQ-728, REQ-742): the same rules by the class, without style queries. */
+:where(.app--tablet) .day-slider-card {
+  min-height: 0;
+  padding-left: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:where(.app--tablet) .day-slider-card__label {
+  display: none;
+}
+
+/*
+ * REQ-607, REQ-615: as much room from the place row (or the chains) to the strip as from the row of the grips to the
+ * meteogram's first row, 10 instead of the page's 12 px: the slider takes 2 px of the gap back above and below it.
+ * The chart moves up by the room above its model headers itself (MeteogramPanel.css, `--meteogram-top-room`), so
+ * with or without them its first row, model header or day row, starts that far below the grips.
+ */
+:where(.app--tablet) .day-slider-card {
+  --day-slider-gap: 0.625rem;
+  margin-block: calc(var(--day-slider-gap) - var(--space-3));
+}
+
+/*
+ * Without days on a phone, also in landscape, where the page has the desktop's widths (REQ-740): no card and no label
+ * "Horizon" around "No forecast available." or "Loading forecast…", as upright; the label belongs to the slider.
+ */
+.day-slider-card--bare {
+  min-height: 0;
+  padding-left: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.day-slider-card--bare .day-slider-card__label {
+  display: none;
+}

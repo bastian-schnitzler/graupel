@@ -1,0 +1,38 @@
+{
+  "name": "@graupel/meteogram",
+  "version": "0.12.3",
+  "description": "Framework-freier Kern der Graupel-Meteogramm-Bibliothek",
+  "license": "MPL-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./png": {
+      "types": "./dist/png/index.d.ts",
+      "import": "./dist/png/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "THIRD_PARTY_LICENSES.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "lint": "eslint src test",
+    "typecheck": "tsc -p tsconfig.json && tsc -p test/tsconfig.json",
+    "demo": "tsup && node demo/serve.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1",
+    "tsup": "^8.5.1"
+  }
+}

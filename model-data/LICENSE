@@ -1,0 +1,33 @@
+Licenses of @graupel/model-data
+===============================
+
+The files of this package are under two licenses. Each data file names its
+license in the header field meta.license; REUSE.toml lists the same
+assignment in machine-readable form. The full license texts are in
+LICENSES/.
+
+Data derived from Open-Meteo.com: Creative Commons Attribution 4.0
+International (CC-BY-4.0, LICENSES/CC-BY-4.0.txt)
+
+  model_catalogue.json
+  model_domains.json
+  chain_zones.json
+  chain_zones.geojson
+
+  Contains data derived from Open-Meteo.com (CC BY 4.0,
+  https://open-meteo.com/). Modified: selected, combined and processed by
+  graupel-gen; see meta.sources of each file.
+
+  When you use or redistribute these files, keep this attribution, the
+  license notice and the note that the data was modified.
+
+Own data without Open-Meteo content: Mozilla Public License 2.0
+(MPL-2.0, LICENSES/MPL-2.0.txt)
+
+  quantities.json
+  regions.geojson      (country borders from Natural Earth, public domain,
+                        combined with own curation)
+  resolver_cases.json
+  package.json, README.md, THIRD_PARTY_LICENSES.md
+
+Copyright 2026 Bastian Schnitzler

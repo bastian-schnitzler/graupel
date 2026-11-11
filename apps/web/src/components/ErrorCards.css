@@ -1,0 +1,94 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Error cards (REQ-492): fixed in the bottom-left corner, clear of the notch and home bar (safe-area insets); on phones
+ * as wide as the page minus its gutters. The column lets clicks through between the cards.
+ */
+.error-cards {
+  position: fixed;
+  z-index: 1100;
+  left: max(var(--page-gutter), env(safe-area-inset-left));
+  bottom: max(var(--page-gutter), env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(24rem, calc(100vw - 2 * var(--page-gutter) - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  margin: 0;
+  pointer-events: none;
+}
+
+/* Above the OK and Cancel buttons of the full-screen map. */
+body:has(.map-dialog) .error-cards {
+  bottom: max(5rem, calc(env(safe-area-inset-bottom) + 4rem));
+}
+
+/* On the desktop beside the tile that switches maps (REQ-659), so that the other map stays at hand when one fails. */
+body:has(.map-switch--tile) .error-cards {
+  left: max(calc(0.75rem + 80px + var(--space-3)), env(safe-area-inset-left));
+}
+
+.error-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-2) var(--space-3) var(--space-3);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 0.25rem solid var(--color-error, #b42318);
+  border-radius: var(--radius-md);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.2);
+  pointer-events: auto;
+}
+
+.error-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.error-card__text,
+.error-card__detail {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+/* Where to change the setting (REQ-509): under the message, a little quieter. */
+.error-card__detail {
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  overflow-wrap: break-word;
+}
+
+.error-card__close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin: calc(-1 * var(--space-1)) 0;
+  padding: 0;
+  color: var(--color-text-muted);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .error-card__close:hover {
+    color: var(--color-text);
+    background: var(--color-surface-muted);
+  }
+}
+
+.error-card__close:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
+}
+
+.error-card__close svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}

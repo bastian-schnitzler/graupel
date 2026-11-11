@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bastian-schnitzler/graupel/apps/web/config.schema.json",
+  "title": "Graupel website configuration",
+  "description": "config.json of one deployment (REQ-427). Every field is optional; missing fields take the defaults from src/config/defaults.ts. Objects are merged with the defaults field by field, arrays replace them.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional reference to this schema for editors."
+    },
+    "startLocation": {
+      "description": "Place shown at start on the first visit; later the place shown last opens, unless the user chose another start place in the settings (REQ-599). \"gps\": the location picker offers the current position; GPS is only requested when the user presses the button (DEC-021), until then the first favorite preset (or the built-in default) is shown. A place: shown at start; the user can still switch to GPS. No IP location.",
+      "oneOf": [{ "const": "gps" }, { "$ref": "#/$defs/place" }]
+    },
+    "modelChain": {
+      "type": "boolean",
+      "description": "Offer the model chain cards (weather and cloud chain). false leaves out both cards and the \"Model chain\" section of the settings; the chains are still loaded for the meteogram."
+    },
+    "showWeatherChain": {
+      "type": "boolean",
+      "description": "Show the weather chain card while the user has made no own choice in the settings (REQ-503). Default false. Ignored with modelChain: false."
+    },
+    "showCloudChain": {
+      "type": "boolean",
+      "description": "Show the cloud chain card while the user has made no own choice in the settings (REQ-503). Default false. Hiding it does not change what is loaded: the cloud chain still feeds the meteogram's cloud area. Ignored with modelChain: false."
+    },
+    "modelHeaders": {
+      "type": "boolean",
+      "description": "Show the model header row in the meteogram."
+    },
+    "imageModelHeaders": {
+      "type": "boolean",
+      "description": "Currently without effect, kept for later (REQ-539, DEC-094): the picture of the meteogram that is copied, saved or shared follows the model headers on screen (modelHeaders or the user's own choice in the settings). Default false."
+    },
+    "daySlider": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Day slider above the meteogram.",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "days": {
+          "description": "Number of days the slider offers, or \"all\" for every day of the forecast.",
+          "oneOf": [{ "type": "integer", "minimum": 1, "maximum": 46 }, { "const": "all" }]
+        }
+      }
+    },
+    "favorites": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Favorites tab and the favorites it starts with.",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "presets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/place" },
+          "maxItems": 50
+        }
+      }
+    },
+    "map": {
+      "enum": ["opentopomap", "maptoolkit"],
+      "description": "Map provider: OpenTopoMap tiles with Leaflet (default) or the Maptoolkit topo map with MapLibre (DEC-022)."
+    },
+    "languages": {
+      "type": "array",
+      "description": "Languages offered in the language menu (REQ-423, DEC-020).",
+      "items": { "$ref": "#/$defs/language" },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "defaultLanguage": {
+      "$ref": "#/$defs/language",
+      "description": "Fallback language when the browser language is not offered. Must be one of languages."
+    },
+    "timeZone": {
+      "type": "string",
+      "minLength": 1,
+      "description": "IANA time zone of the domain's default place, e.g. \"Europe/Vienna\" (REQ-733). The model info shows the run times in the device's time zone, and in this one when the device's cannot be determined. Default \"Europe/Paris\" (Mont Blanc). A name the browser does not know falls back to the default."
+    },
+    "domain": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Domain in short form, e.g. \"graupel.eu\", shown in the middle of the meteogram footer (REQ-464). Without it the host name of the page is shown (without \"www.\"; nothing on localhost or an IP address)."
+    },
+    "legal": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Legal information of the domain (REQ-430, DEC-023). The texts themselves live in the translations.",
+      "properties": {
+        "hosting": {
+          "enum": ["github-pages", "all-inkl"],
+          "description": "Provider that actually serves the site (REQ-710); the privacy policy names it in its Hosting section and `imprint.hoster: true` shows its contact details. Default \"github-pages\"."
+        },
+        "imprint": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Fixed label of the imprint link, e.g. \"Impressum\" or \"Mentions légales\"; without it the translated label is used."
+            },
+            "name": { "type": "string", "minLength": 1, "description": "Name of the operator." },
+            "residence": { "type": "string", "minLength": 1, "description": "Place of residence, e.g. \"Berlin\"." },
+            "address": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "description": "Postal address, one entry per line."
+            },
+            "email": { "type": "string", "minLength": 3 },
+            "hoster": {
+              "description": "Hosting provider as contact (e.g. for an anonymous imprint in France). true: the provider of legal.hosting (GitHub, Inc. by default); an object: these details, the same on every target (DEC-086).",
+              "oneOf": [{ "type": "boolean" }, { "$ref": "#/$defs/hoster" }]
+            }
+          }
+        },
+        "privacy": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Privacy policy (REQ-432).",
+          "properties": {
+            "controller": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name"],
+              "description": "Controller named in the privacy policy instead of the imprint operator, with name and email only, no address (DEC-028). For a domain whose imprint stays anonymous (e.g. .fr); the imprint is not changed.",
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "email": { "type": "string", "minLength": 3 }
+              }
+            },
+            "swissNotice": {
+              "type": "boolean",
+              "description": "Show the section for Switzerland (revDSG, EDÖB). Default false; true only on .ch (DEC-029)."
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "hoster": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "Company name, e.g. \"GitHub, Inc.\"." },
+        "address": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Postal address, one entry per line."
+        },
+        "phone": { "type": "string", "minLength": 3 },
+        "email": { "type": "string", "minLength": 3 },
+        "url": { "type": "string", "minLength": 1 }
+      }
+    },
+    "language": {
+      "enum": ["en", "de", "fr", "it", "sl", "cs", "nl", "da"]
+    },
+    "place": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "lat", "lon"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+        "elevation": { "type": "number", "minimum": -500, "maximum": 9000, "description": "Metres above sea level." }
+      }
+    }
+  }
+}

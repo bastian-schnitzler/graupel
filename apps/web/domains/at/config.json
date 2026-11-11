@@ -1,0 +1,25 @@
+{
+  "$schema": "../../config.schema.json",
+  "domain": "graupel.at",
+  "startLocation": {"name": "Großglockner", "lat": 47.0742, "lon": 12.6947, "elevation": 3798},
+  "timeZone": "Europe/Vienna",
+  "modelChain": true,
+  "modelHeaders": true,
+  "daySlider": {"enabled": true, "days": "all"},
+  "favorites": {
+    "enabled": true,
+    "presets": []
+  },
+  "map": "opentopomap",
+  "languages": ["de", "en", "fr", "it", "sl", "cs", "nl", "da"],
+  "defaultLanguage": "de",
+  "legal": {
+    "hosting": "all-inkl",
+    "imprint": {
+      "label": "Impressum",
+      "name": "Bastian Schnitzler",
+      "email": "baschni@gmx.de",
+      "residence": "Berlin"
+    }
+  }
+}

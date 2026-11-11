@@ -1,0 +1,66 @@
+# Baut die Website bei jedem Versions-Tag (web-v*), prüft alles und hängt graupel-site.zip an das Release dieses Tags.
+name: Release
+
+on:
+  push:
+    tags:
+      - "web-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag des Releases, z. B. web-v0.4.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: pnpm einrichten
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Abhängigkeiten installieren
+        run: pnpm install --frozen-lockfile
+
+      - name: Prüfen (Lint, Typen, Tests)
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+
+      - name: Website bauen und packen
+        run: |
+          pnpm --filter "@graupel/web..." build
+          pnpm --filter @graupel/web package
+
+      - name: Release anlegen oder Artefakt ersetzen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZIP: apps/web/release/graupel-site.zip
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" --clobber
+          else
+            gh release create "$TAG" "$ZIP" --verify-tag --title "Graupel $TAG" \
+              --notes "Gebaute Website (statisch). Je Domain kommt eine config.json aus apps/web/domains/ dazu."
+          fi

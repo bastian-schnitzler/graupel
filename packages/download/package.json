@@ -1,0 +1,36 @@
+{
+  "name": "@graupel/download",
+  "version": "0.2.0",
+  "description": "Lädt Wettermodellketten von Open-Meteo und setzt sie zu einer stündlichen Zeitachse zusammen.",
+  "private": true,
+  "license": "MPL-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@graupel/model-data": "workspace:*",
+    "@types/node": "^22.20.5",
+    "jsdom": "^30.0.1",
+    "tsup": "^9.0.0"
+  }
+}

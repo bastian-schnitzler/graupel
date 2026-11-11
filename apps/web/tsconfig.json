@@ -1,0 +1,26 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    "allowImportingTsExtensions": true,
+    "declaration": false,
+    "declarationMap": false,
+    // Typprüfung gegen die Quellen der Workspace-Pakete, ohne vorherigen Build.
+    "paths": {
+      "@graupel/meteogram": ["../../packages/meteogram/src/index.ts"],
+      "@graupel/meteogram/png": ["../../packages/meteogram/src/png/index.ts"],
+      "@graupel/meteogram-react": ["../../packages/meteogram-react/src/index.ts"],
+      "@graupel/download": ["../../packages/download/src/index.ts"]
+    }
+  },
+  "include": [
+    "src",
+    "test",
+    "e2e",
+    "scripts",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ]
+}

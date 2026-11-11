@@ -1,0 +1,18 @@
+{
+  "$schema": "../config.schema.json",
+  "startLocation": { "name": "Mont Blanc", "lat": 45.8326, "lon": 6.8652, "elevation": 4806 },
+  "timeZone": "Europe/Paris",
+  "modelChain": true,
+  "showWeatherChain": false,
+  "showCloudChain": false,
+  "modelHeaders": true,
+  "daySlider": { "enabled": true, "days": "all" },
+  "favorites": {
+    "enabled": true,
+    "presets": []
+  },
+  "map": "opentopomap",
+  "languages": ["de", "en", "fr", "it", "sl", "cs", "nl", "da"],
+  "defaultLanguage": "en",
+  "legal": { "imprint": { "hoster": true }, "privacy": { "swissNotice": false } }
+}

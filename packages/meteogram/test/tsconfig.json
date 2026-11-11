@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": [],
+    // Taken-over tests index result arrays directly; a failing index fails the test anyway.
+    "noUncheckedIndexedAccess": false
+  },
+  // vitest.config.ts brings the Node types (via vitest/config) that the license test needs.
+  "include": [".", "../src", "../vitest.config.ts"]
+}

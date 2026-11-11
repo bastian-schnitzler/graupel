@@ -1,0 +1,5 @@
+# Workspace nach DEC-005: Bibliotheken, Apps und die Generator-Ausgabe.
+packages:
+  - packages/*
+  - apps/*
+  - model-data

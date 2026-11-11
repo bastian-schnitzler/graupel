@@ -1,0 +1,132 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: 2026 Bastian Schnitzler -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Domains</title>
+<!-- Data: data/*.json from model-data/ (scripts/prebuild.mjs). `pnpm build` writes the site to dist/; serve it
+     over http(s) (`pnpm serve`): opened from disk (file://) the browser loads neither ES modules nor the data. -->
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="vendor/maplibre-gl/maplibre-gl.css">
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #111827;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --hover: #1e293b;
+    --active: #334155;
+    --accent: #3b82f6;
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #app { display: flex; height: 100vh; }
+  #sidebar { width: 344px; flex: none; overflow-y: auto; overflow-x: hidden; background: var(--panel);
+    border-right: 1px solid var(--border); }
+  #sidebar h1 { font-size: 15px; margin: 0; padding: 14px 16px 6px; }
+  #sidebar p { margin: 0; padding: 0 16px 10px; color: var(--muted); font-size: 12px; }
+  #sidebar p.credit { font-size: 11px; }
+  #sidebar p.credit a { color: inherit; }
+  #sidebar h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin: 10px 16px 4px; }
+  .model { box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 16px;
+    border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .model:hover { background: var(--hover); }
+  .model.active { background: var(--active); }
+  .model input { margin: 0; flex: none; }
+  .model.off .label, .model.off .swatch { opacity: .45; }
+  #sidebar h2 label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  #sidebar h2.group { display: flex; align-items: center; gap: 4px; }
+  #sidebar h2.group label { flex: 1; }
+  .chev { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 2px;
+    margin-left: auto; font-size: 14px; line-height: 1; transition: transform .15s; }
+  .chev[aria-expanded="false"] { transform: rotate(90deg); }
+  .group-body[hidden] { display: none; }
+  /* Entries sit one checkbox width (14px + 10px gap) right of their category. */
+  .group-body .model { padding-left: 40px; }
+  /* Tick boxes: checked = solid tick, partial = dashed box, translucent tick. */
+  .tick { appearance: none; -webkit-appearance: none; flex: none; width: 14px; height: 14px;
+    margin: 0; border: 1.5px solid var(--muted); border-radius: 3px; display: inline-grid;
+    place-content: center; cursor: pointer; background: transparent; }
+  .tick::after { content: "\2713"; font-size: 11px; line-height: 1; color: #fff; visibility: hidden; }
+  .tick:checked { background: var(--accent); border-color: var(--accent); }
+  .tick:checked::after { visibility: visible; }
+  .tick.partial { border-style: dashed; border-color: var(--accent); background: transparent; }
+  .tick.partial::after { visibility: visible; color: var(--accent); opacity: .55; }
+  .tick:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .model[hidden], h2[hidden] { display: none; }
+  #filters { display: flex; gap: 6px; padding: 0 16px 8px; flex-wrap: wrap; }
+  #filters label { display: flex; align-items: center; gap: 5px; padding: 3px 9px;
+    border: 1px solid var(--border); border-radius: 999px; font-size: 12px; cursor: pointer; }
+  #filters label:has(input:checked) { background: var(--active); }
+  #filters label:has(input.partial) { border-style: dashed; }
+  #filters input { margin: 0; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+  .label { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+  .label small { display: block; color: var(--muted); font-size: 11px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  #map { flex: 1; min-width: 0; }
+  #tabs { display: flex; gap: 4px; padding: 0 16px 10px; }
+  #tabs button { flex: 1; padding: 6px 0; border: 1px solid var(--border); border-radius: 6px;
+    background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+  #tabs button[aria-selected="true"] { background: var(--active); color: var(--text); }
+  section[hidden] { display: none; }
+  .switch { display: flex; align-items: center; gap: 8px; margin: 0 16px 6px; font-size: 13px;
+    cursor: pointer; }
+  .switch input { appearance: none; -webkit-appearance: none; width: 30px; height: 16px; margin: 0;
+    border-radius: 8px; background: var(--border); position: relative; cursor: pointer; flex: none; }
+  .switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px;
+    height: 12px; border-radius: 50%; background: var(--text); transition: left .15s; }
+  .switch input:checked { background: var(--accent); }
+  .switch input:checked::after { left: 16px; }
+  .chain { color: var(--muted); }
+  .domains .muted { color: #64748b; font-weight: 400; display: block; }
+  .leaflet-tooltip.domains { font: 12px/1.5 system-ui, sans-serif; }
+  .domains b { display: block; }
+  #status { padding: 0 16px 10px; color: var(--muted); font-size: 12px; }
+  #status.error { color: #fca5a5; }
+  #status:empty { display: none; }
+  @media (max-width: 640px) {
+    #app { flex-direction: column-reverse; }
+    #sidebar { width: auto; height: 40vh; border-right: 0; border-top: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <h1>Model domains</h1>
+    <p id="status" role="status">Loading model data…</p>
+    <div id="tabs" role="tablist">
+      <button role="tab" aria-selected="true" aria-controls="tab-domains" data-tab="domains">Domains</button>
+      <button role="tab" aria-selected="false" aria-controls="tab-chains" data-tab="chains">Chains</button>
+    </div>
+    <section id="tab-domains" role="tabpanel">
+      <p>Where each Open-Meteo model delivers data. Click a model to zoom to it; checkboxes toggle models, categories and horizons.</p>
+      <h2>Forecast horizon</h2>
+      <div id="filters"></div>
+      <div id="list"></div>
+    </section>
+    <section id="tab-chains" role="tabpanel" hidden>
+      <p>Areas with the same automatic model chain (main and cloud), as resolved by the app: regions, domain coverage and fallback applied. Click an area to zoom to it.</p>
+      <label class="switch"><input type="checkbox" id="show-coast"> Show coast regions</label>
+      <label class="switch"><input type="checkbox" id="show-sea"> Show sea regions</label>
+      <div id="zone-list"></div>
+    </section>
+    <footer id="attribution">
+      <p class="credit">Base map: <a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a>, &copy; <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a>, data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>.</p>
+      <p class="credit">Model domains and chain zones derived from <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> data (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>), modified. Country borders: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a>.</p>
+      <p class="credit">&copy; 2026 Bastian Schnitzler. Code: <a href="LICENSE" target="_blank">GPL-3.0-or-later</a>; data: <a href="LICENSES/CC-BY-4.0.txt" target="_blank">CC BY 4.0</a> and <a href="LICENSES/MPL-2.0.txt" target="_blank">MPL-2.0</a> (<a href="data/LICENSE" target="_blank">details</a>). <a href="THIRD_PARTY_LICENSES.md" target="_blank">Third-party licenses</a>.</p>
+    </footer>
+  </aside>
+  <div id="map" data-testid="map"></div>
+</div>
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/maplibre-gl/maplibre-gl.js"></script>
+<script src="vendor/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
+<script type="module" src="src/viewer.js"></script>
+</body>
+</html>

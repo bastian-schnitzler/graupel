@@ -1,0 +1,116 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Header bar (REQ-434): language, settings, info and download in one row (REQ-501); settings and info as icons (REQ-455). It shares the card of
+ * the location picker (REQ-450): above it on phones (REQ-459), on its right at the top edge on wide screens.
+ */
+.header {
+  display: flex;
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.header__bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+/*
+ * Language field (REQ-526): the globe inside the field on the left, an own arrow on the right, as high as the icon
+ * buttons. The globe's centre lies where the GPS button of the search field has its centre (border 1 px, margin
+ * 1 px, button 2.25rem wide), so on phones, where both fields start at the same edge, the globe stands above it.
+ */
+.header__language {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  margin-inline-end: auto;
+  color: var(--color-text-muted);
+}
+
+/* Two classes, so it wins over `.field` from global.css, which loads after this file. */
+.header__language .header__select {
+  min-width: 0;
+  max-width: 12rem;
+  height: 2.5rem;
+  min-height: 2.5rem;
+  padding-block: 0;
+  padding-inline: 2.5rem 2rem;
+  color: var(--color-text);
+  cursor: pointer;
+  appearance: none;
+}
+
+.header__globe,
+.header__chevron {
+  position: absolute;
+  top: 50%;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.header__globe {
+  inset-inline-start: calc(2px + 1.125rem - 10px);
+}
+
+.header__chevron {
+  inset-inline-end: var(--space-2);
+  width: 16px;
+  height: 16px;
+}
+
+.header__button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.5rem;
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .header__button:hover {
+    background: var(--color-surface-muted);
+  }
+}
+
+.header__button--download {
+  font-weight: 600;
+  color: var(--color-accent-contrast);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+@media (hover: hover) {
+  .header__button--download:hover {
+    background: var(--color-accent);
+    filter: brightness(1.1);
+  }
+}
+
+/* Settings, info and download: icons only (REQ-455, REQ-501); the name is read by screen readers and shown as tooltip. */
+.header__button--icon {
+  justify-content: center;
+  width: 2.5rem;
+  padding: 0;
+}
+
+@container app (min-width: 48rem) {
+  .header {
+    padding: var(--space-3) var(--space-4) var(--space-3) 0;
+  }
+
+  .header__language {
+    margin-inline-end: 0;
+  }
+}

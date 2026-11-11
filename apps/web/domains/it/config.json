@@ -1,0 +1,24 @@
+{
+  "$schema": "../../config.schema.json",
+  "domain": "graupel.it",
+  "startLocation": {"name": "Ortler", "lat": 46.5086, "lon": 10.5447, "elevation": 3905},
+  "timeZone": "Europe/Rome",
+  "modelChain": true,
+  "modelHeaders": true,
+  "daySlider": {"enabled": true, "days": "all"},
+  "favorites": {
+    "enabled": true,
+    "presets": []
+  },
+  "map": "opentopomap",
+  "languages": ["de", "en", "fr", "it", "sl", "cs", "nl", "da"],
+  "defaultLanguage": "it",
+  "legal": {
+    "hosting": "all-inkl",
+    "imprint": {
+      "label": "Note legali",
+      "name": "Bastian Schnitzler",
+      "email": "baschni@gmx.de"
+    }
+  }
+}

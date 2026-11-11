@@ -1,0 +1,28 @@
+# Lizenzangaben der Modelldaten (DEC-006, REUSE-Spezifikation 3.3). JSON hat
+# keine Kommentare; jede Datendatei nennt ihre Lizenz zusätzlich in meta.license.
+version = 1
+
+# Aus Open-Meteo abgeleitete Daten: CC BY 4.0 mit Namensnennung.
+[[annotations]]
+path = [
+    "model_catalogue.json",
+    "model_domains.json",
+    "chain_zones.json",
+    "chain_zones.geojson",
+]
+SPDX-FileCopyrightText = ["2026 Bastian Schnitzler", "Open-Meteo.com"]
+SPDX-License-Identifier = "CC-BY-4.0"
+
+# Eigene Daten ohne Open-Meteo-Bezug und Paketdateien: MPL-2.0 wie der Generator.
+[[annotations]]
+path = [
+    "quantities.json",
+    "regions.geojson",
+    "resolver_cases.json",
+    "package.json",
+    "README.md",
+    "CHANGES.md",
+    "THIRD_PARTY_LICENSES.md",
+]
+SPDX-FileCopyrightText = "2026 Bastian Schnitzler"
+SPDX-License-Identifier = "MPL-2.0"

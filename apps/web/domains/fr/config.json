@@ -1,0 +1,34 @@
+{
+  "$schema": "../../config.schema.json",
+  "domain": "graupel.fr",
+  "startLocation": {"name": "Mont Blanc", "lat": 45.8326, "lon": 6.8652, "elevation": 4806},
+  "timeZone": "Europe/Paris",
+  "modelChain": true,
+  "modelHeaders": true,
+  "daySlider": {"enabled": true, "days": "all"},
+  "favorites": {
+    "enabled": true,
+    "presets": []
+  },
+  "map": "opentopomap",
+  "languages": ["de", "en", "fr", "it", "sl", "cs", "nl", "da"],
+  "defaultLanguage": "fr",
+  "legal": {
+    "hosting": "all-inkl",
+    "imprint": {
+      "label": "Mentions légales",
+      "hoster": {
+        "name": "ALL-INKL.COM – Neue Medien Münnich",
+        "address": [
+          "Hauptstraße 68",
+          "02742 Friedersdorf",
+          "Allemagne"
+        ],
+        "phone": "+49 35872 353-10"
+      }
+    },
+    "privacy": {
+      "controller": {"name": "Bastian Schnitzler", "email": "baschni@gmx.de"}
+    }
+  }
+}

@@ -1,0 +1,15 @@
+__pycache__/
+.DS_Store
+# Node / pnpm
+node_modules/
+dist/
+# Release-Artefakt der Website (apps/web/scripts/package-site.mjs)
+/apps/web/release/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+# Python (generator/)
+.venv/
+.pytest_cache/
+*.egg-info/

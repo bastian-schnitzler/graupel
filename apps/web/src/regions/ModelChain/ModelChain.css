@@ -1,0 +1,471 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Model chains (REQ-435): the weather and the cloud chain, each its own card at the width of the other cards
+ * (REQ-482).
+ */
+.model-chains {
+  --chain-label-width: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.model-chain-status__text {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.model-chains .icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  color: var(--color-text-muted);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .model-chains .icon-button:hover {
+    color: var(--color-text);
+  }
+}
+
+/* One chain = one card (the look of .region); widths of its model cards in % follow the hours of each model. */
+.model-chain-row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-surface);
+}
+
+.model-chain-row__empty {
+  flex: 1;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  background: var(--color-surface);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.model-chain-row--labelled {
+  padding-left: var(--chain-label-width);
+}
+
+.model-chain-row__label {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--chain-label-width);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
+  pointer-events: none;
+}
+
+.model-chain-row__cell {
+  position: relative;
+  flex-grow: 0;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.model-card {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border-top: 0.25rem solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+  transition: background-color 0.2s ease;
+  user-select: none;
+}
+
+.model-chain-row__cell:last-child .model-card {
+  border-right: 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.model-chain-row:not(.model-chain-row--labelled) .model-chain-row__cell:first-child .model-card {
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.model-card__top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1);
+}
+
+.model-card__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+}
+
+.model-card__info {
+  position: relative;
+}
+
+.model-card__range {
+  padding: 0.125rem var(--space-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+}
+
+/* A model that delivered no data in its slice. */
+.model-card__range[data-span="none"] {
+  font-weight: 600;
+  opacity: 0.65;
+}
+
+/* Info popover */
+.model-info {
+  position: absolute;
+  z-index: 100;
+  top: 100%;
+  left: 50%;
+  /* Wide enough for the runs and the explanation (REQ-687), never wider than the window. */
+  width: min(20rem, calc(100vw - 1rem));
+  padding: var(--space-2) var(--space-3);
+  transform: translateX(-50%);
+  font-size: 0.8rem;
+  text-align: left;
+  white-space: normal;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 0.625rem 1.5rem rgb(0 0 0 / 0.2);
+}
+
+.model-info__title {
+  margin: 0 0 var(--space-2);
+}
+
+/*
+ * On a phone the details open as a dialog as big as the settings (REQ-719, `dialog--tall`): the title in the heading
+ * row, the close button at the top right, the rest in the body, which scrolls when it is longer.
+ */
+.model-info-dialog__host {
+  display: contents;
+}
+
+/* A title over two lines keeps the X at the top right, beside its first line. */
+.model-info-dialog .dialog__header {
+  align-items: flex-start;
+}
+
+.model-info-dialog .dialog__title {
+  padding-top: calc((2.5rem - 1lh) / 2);
+  font-size: var(--font-size-md);
+  font-weight: 400;
+}
+
+.model-info-dialog__content {
+  text-align: left;
+}
+
+/* Model name and publisher as links (REQ-687): accent colour, underlined, so they read as links without hover. */
+.model-info__link {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+
+.model-info__link:focus-visible {
+  text-decoration-thickness: 2px;
+}
+
+/* Hover look only for pointers that can hover (REQ-598). */
+@media (hover: hover) {
+  .model-info__link:hover {
+    text-decoration-thickness: 2px;
+  }
+}
+
+/* Note on a replaced model (REQ-767), between the title and the properties. */
+.model-info__replaced {
+  margin: 0 0 var(--space-2);
+}
+
+.model-info__specs {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.125rem var(--space-3);
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.model-info__spec {
+  display: contents;
+}
+
+.model-info__specs dt {
+  font-weight: 700;
+}
+
+.model-info__specs dd {
+  margin: 0;
+}
+
+/* Runs below the properties, each section with its title (REQ-687). */
+.model-info__runs {
+  margin-top: var(--space-2);
+}
+
+.model-info__runs-title {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+}
+
+.model-info__run {
+  margin: 0.125rem 0 0;
+}
+
+/* Explanation of "Max (from now)" below the runs (REQ-687). */
+.model-info__explanation {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.model-info__explanation p {
+  margin: 0;
+}
+
+.model-info__explanation p + p {
+  margin-top: var(--space-1);
+}
+
+/* Boundary between two cards (REQ-481): dragged with mouse, pen or finger, moved with the keys. */
+.model-resize-handle {
+  --handle-width: 1rem;
+  position: absolute;
+  z-index: 10;
+  top: 0;
+  right: calc(var(--handle-width) / -2);
+  bottom: 0;
+  width: var(--handle-width);
+  cursor: ew-resize;
+  touch-action: none;
+  outline: none;
+}
+
+/* A wider grip for fingers. */
+@media (pointer: coarse) {
+  .model-resize-handle {
+    --handle-width: 1.75rem;
+  }
+}
+
+.model-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: var(--space-2);
+  right: 0.375rem;
+  bottom: var(--space-2);
+  width: 0.1875rem;
+  border-radius: 999px;
+  background-color: var(--color-text-muted);
+  opacity: 0.45;
+  transition:
+    opacity 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.model-resize-handle:focus-visible::after,
+.model-resize-handle.active-resizing::after {
+  background-color: var(--color-accent);
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .model-resize-handle:hover::after {
+    background-color: var(--color-accent);
+    opacity: 1;
+  }
+}
+
+.model-resize-handle:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+/* Narrow page (phones): the name gets its own line above the buttons, the buttons shrink. */
+@container app (max-width: 40rem) {
+  .model-card__top {
+    flex-wrap: wrap;
+    gap: 0;
+  }
+
+  .model-card__top .model-card__name {
+    flex: 1 1 100%;
+  }
+
+  .model-chains .model-card .icon-button {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .model-card {
+    padding-left: var(--space-2);
+    padding-right: var(--space-1);
+  }
+
+  .model-card__range {
+    padding: 0.125rem var(--space-1);
+    font-size: 0.7rem;
+  }
+}
+
+/* Tablet (REQ-728, REQ-742): the same rules by the class, without style queries. */
+:where(.app--tablet) .model-card__top {
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+:where(.app--tablet) .model-card__top .model-card__name {
+  flex: 1 1 100%;
+}
+
+:where(.app--tablet) .model-chains .model-card .icon-button {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+:where(.app--tablet) .model-card {
+  padding-left: var(--space-2);
+  padding-right: var(--space-1);
+}
+
+:where(.app--tablet) .model-card__range {
+  padding: 0.125rem var(--space-1);
+  font-size: 0.7rem;
+}
+
+/*
+ * Phones (REQ-609): the grip stands in the middle of the thin line between two cards (the left card's 1 px right
+ * border), also while it is dragged: the handle is centred on that line and the grip in the handle.
+ */
+@container app (max-width: 40rem) {
+  .model-resize-handle {
+    right: calc(0.5px - var(--handle-width) / 2);
+  }
+
+  .model-resize-handle::after {
+    right: auto;
+    left: calc(50% - 0.09375rem);
+  }
+}
+
+/* Tablet (REQ-728, REQ-742): the same rules by the class, without style queries. */
+:where(.app--tablet) .model-resize-handle {
+  right: calc(0.5px - var(--handle-width) / 2);
+}
+
+:where(.app--tablet) .model-resize-handle::after {
+  right: auto;
+  left: calc(50% - 0.09375rem);
+}
+
+/*
+ * Phones (REQ-529): the chains are not cards and have no labels "Weather" and "Clouds"; the model cards stand on the
+ * page as a strip with rounded ends.
+ */
+@container app (max-width: 40rem) {
+  .model-chain-row {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .model-chain-row--labelled {
+    padding-left: 0;
+  }
+
+  .model-chain-row__label {
+    display: none;
+  }
+
+  .model-chain-row__cell:first-child .model-card,
+  .model-chain-row__label + .model-chain-row__cell .model-card {
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+  }
+
+  .model-chain-row__cell:first-child:last-child .model-card,
+  .model-chain-row__label + .model-chain-row__cell:last-child .model-card,
+  .model-chain-row__empty {
+    border-radius: var(--radius-md);
+  }
+}
+
+/* Tablet (REQ-728, REQ-742): the same rules by the class, without style queries. */
+:where(.app--tablet) .model-chain-row {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:where(.app--tablet) .model-chain-row--labelled {
+  padding-left: 0;
+}
+
+:where(.app--tablet) .model-chain-row__label {
+  display: none;
+}
+
+:where(.app--tablet) .model-chain-row__cell:first-child .model-card,
+:where(.app--tablet) .model-chain-row__label + .model-chain-row__cell .model-card {
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+:where(.app--tablet) .model-chain-row__cell:first-child:last-child .model-card,
+:where(.app--tablet) .model-chain-row__label + .model-chain-row__cell:last-child .model-card,
+:where(.app--tablet) .model-chain-row__empty {
+  border-radius: var(--radius-md);
+}

@@ -1,0 +1,860 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Meteogram (REQ-436): chart, loading and error states, data attribution. The card has no visible heading (REQ-507):
+ * the chart, and to its right a narrow column with the copy, save and full-screen buttons. On a phone the copy and save
+ * buttons stand in the page footer's row instead (REQ-541) and the chart takes the whole width. The day slider has a
+ * card of its own above it (REQ-499).
+ */
+.meteogram-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+/* Takes the width beside the button column; min-width 0 lets the chart scroll inside instead of widening the page. */
+.meteogram {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 20rem;
+}
+
+/* No visible scroll bar, nor the space a classic one keeps free (REQ-577): swipe, trackpad and wheel still scroll. */
+.meteogram__scroll {
+  /* The info buttons of the model headers (REQ-643) are placed in it and scroll with the chart. */
+  position: relative;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.meteogram__scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * The chart scales with its width (text included); below 40rem it would be too small to read on phones, so it keeps
+ * that width and the wrapper scrolls.
+ */
+.meteogram__chart {
+  min-width: 40rem;
+}
+
+/*
+ * Phone in portrait (REQ-554): 4.5 days on the screen's width, the factor set by MeteogramPanel. The chart's viewBox
+ * narrows with it, so the chart keeps the height of all days (REQ-585).
+ */
+.meteogram__scroll--portrait .meteogram__chart {
+  width: calc(100% * var(--meteogram-width-factor, 1));
+  min-width: 0;
+}
+
+/* There the chart takes the height the page leaves it (REQ-608), also below the card's least height for messages. */
+.meteogram:has(> .meteogram__scroll--portrait) {
+  min-height: 0;
+}
+
+/*
+ * Below the chart on a phone in portrait (REQ-616): only the data source with the data's time, as small as the chart's
+ * own label row and the place between the slider's grips. Outside the sideways scrolling, with the page's side margin.
+ * The chart's own row (place, domain, source at its end) is hidden there; the copied or saved image draws it, so
+ * MeteogramImageActions shows it while it reads the page (`meteogram__scroll--export`).
+ */
+.meteogram__source {
+  margin: 0;
+  padding: 2px var(--page-gutter) 3px;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.meteogram__source a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.meteogram__scroll--portrait:not(.meteogram__scroll--export) .meteogram-footer-row {
+  display: none !important;
+}
+
+.meteogram__status {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* "Updating forecast…" floats over the top of the chart, so the chart keeps its place (REQ-497). */
+.meteogram__status--overlay {
+  position: absolute;
+  top: var(--space-2);
+  left: 50%;
+  z-index: 1;
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  white-space: nowrap;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.meteogram__retry {
+  min-height: 2.5rem;
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  color: var(--color-accent-contrast);
+  background: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+/*
+ * A forecast that could not be loaded leaves only "Try again" (REQ-739, REQ-740): no empty card around it, nor the
+ * phone's margins over the page's side margins. It starts at the left edge of the box "No forecast available." above,
+ * with the page's gap between them, on phones (upright and turned), tablets and desktops alike.
+ */
+.meteogram-card.meteogram-card--bare.region {
+  margin-inline: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.meteogram-card--bare .meteogram {
+  min-height: 0;
+}
+
+/* Button column right of the chart, top-aligned (REQ-507); it stays in place while the chart scrolls sideways. */
+.meteogram-card__tools {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/*
+ * On the desktop the chart takes the card's whole width and the column stands where it stood, top right, in the room
+ * right of the plot, above the right labels (REQ-613), or over those that reach up to it (REQ-672). MeteogramPanel sets
+ * the room and the class only where the chart does not scroll sideways.
+ */
+.meteogram-card--tools-over {
+  position: relative;
+}
+
+.meteogram-card--tools-over .meteogram-card__tools {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-4);
+  z-index: 1;
+}
+
+/*
+ * Right labels that reach up to the buttons, such as the relative humidity's axis, stand under them; the chart keeps
+ * the card's whole width (REQ-672). The buttons are then translucent, the labels show through, and become distinct
+ * when pointed at or focused with the keyboard, on a background that covers the labels.
+ */
+.meteogram-card--tools-translucent .meteogram-card__tools .icon-button {
+  opacity: 0.45;
+  transition:
+    opacity 0.15s ease-out,
+    background-color 0.15s ease-out;
+}
+
+.meteogram-card--tools-translucent .meteogram-card__tools .icon-button:focus-visible {
+  opacity: 1;
+  background: var(--color-surface);
+}
+
+/* Only for pointers that can hover (REQ-598): a tap on a touch screen leaves no opaque button behind. */
+@media (hover: hover) {
+  .meteogram-card--tools-translucent .meteogram-card__tools .icon-button:hover {
+    opacity: 1;
+    background: var(--color-surface-muted);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meteogram-card--tools-translucent .meteogram-card__tools .icon-button {
+    transition: none;
+  }
+}
+
+.meteogram-card__fullscreen,
+.meteogram-card__refresh,
+.meteogram-actions--card .meteogram-actions__button {
+  width: 2rem;
+  height: 2rem;
+  color: var(--color-text-muted);
+}
+
+/* Copy and save buttons (REQ-461); the feedback floats next to them for a moment. */
+.meteogram-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.meteogram-actions--card,
+.meteogram-actions--fullscreen {
+  flex-direction: column;
+}
+
+.meteogram-actions--fullscreen .meteogram-actions__button {
+  color: var(--color-text-muted);
+}
+
+.meteogram-actions__feedback:empty {
+  display: none;
+}
+
+.meteogram-actions__feedback {
+  position: absolute;
+  z-index: 2;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+  pointer-events: none;
+}
+
+/* In the page footer's row on a phone (REQ-541): side by side, as tall as the footer links, which they precede. */
+/*
+ * In the footer's row of a phone or a tablet (REQ-541, REQ-729): the buttons keep their 2.5rem touch height but are
+ * narrower and stand without a gap, so copy, share and the tablet's full screen are close together.
+ */
+.meteogram-actions--footer {
+  gap: 0;
+}
+
+.meteogram-actions--footer .meteogram-actions__button {
+  width: 2rem;
+  height: 2.5rem;
+  color: var(--color-text-muted);
+}
+
+/*
+ * The data source with the data's time in the footer's row beside the buttons (REQ-729): it takes the rest of the row,
+ * in one line, shortened with an ellipsis where it does not fit; on a tablet left of the buttons, on a phone right of
+ * them and right-aligned. It keeps the font size of the line below the chart (REQ-616).
+ */
+.footer__start .meteogram__source {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+}
+
+.footer__start .meteogram-actions + .meteogram__source {
+  text-align: right;
+}
+
+/*
+ * At the right end of the tablet's footer row (REQ-550, REQ-582, REQ-729): the feedback floats above the buttons, right-aligned
+ * with them, so it never runs past the screen's right edge (REQ-589); a long message wraps within the screen.
+ */
+.meteogram-actions--footer .meteogram-actions__feedback {
+  bottom: calc(100% + var(--space-1));
+  right: 0;
+  width: max-content;
+  max-width: calc(100vw - 2 * (var(--page-gutter, var(--space-3)) + var(--safe-area-x, 0px)));
+  white-space: normal;
+  text-align: right;
+}
+
+/* On a phone the buttons stand at the row's start (REQ-729): the feedback floats above them, left-aligned with them. */
+.footer__start > .meteogram-actions--footer:first-child .meteogram-actions__feedback {
+  right: auto;
+  left: 0;
+  text-align: left;
+}
+
+/* Both columns stand at the right edge: the feedback floats to the left of the buttons. */
+.meteogram-actions--card .meteogram-actions__feedback,
+.meteogram-actions--fullscreen .meteogram-actions__feedback {
+  top: 0;
+  right: calc(100% + var(--space-1));
+}
+
+/*
+ * Full-screen view (REQ-454): the dialog covers the whole viewport; no title bar and no dividers (REQ-460), the chart
+ * takes the whole height beside the narrow column with the close, copy and save buttons.
+ */
+.dialog.meteogram-fullscreen {
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* The chart takes the whole width (REQ-553): no margin at the sides, only clear of a notch (safe-area insets). */
+.meteogram-fullscreen .dialog__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  padding: var(--space-2) 0 var(--space-2) env(safe-area-inset-left);
+}
+
+/*
+ * No scroll bars in the view (REQ-530): the chart fits the screen in both directions. Unlike in the card it has no
+ * minimum width; the full-screen mode scales its text with the height.
+ */
+/*
+ * On a phone the view has no buttons (REQ-537): no side column, the chart reaches the right edge too (REQ-553). No
+ * strip above the chart either (REQ-690): it begins right at the safe area's top, below Safari's tab bar or Chrome's
+ * address bar, and takes that height as well.
+ */
+.meteogram-fullscreen--no-controls .dialog__body {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right);
+}
+
+/*
+ * iOS reports the camera's inset on both sides in landscape. Where the side of the camera is known from the screen's
+ * angle (MeteogramFullscreen.tsx), the chart keeps clear of it only there and reaches the screen's edge on the other
+ * side (REQ-606); without it, clear of both sides as above.
+ */
+.meteogram-fullscreen--no-controls.meteogram-fullscreen--camera-left .dialog__body {
+  padding-right: 0;
+}
+
+.meteogram-fullscreen--no-controls.meteogram-fullscreen--camera-right .dialog__body {
+  padding-left: 0;
+}
+
+/*
+ * The row below the chart (place, domain, data source) keeps as far from the screen's edge on the side without the
+ * camera as on the camera's side (REQ-624), so the screen's rounded corner does not cut its text; the chart above
+ * still reaches the edge. The core sets the row's padding inline.
+ */
+.meteogram-fullscreen--no-controls.meteogram-fullscreen--camera-left .meteogram-footer-row {
+  padding-right: var(--safe-area-x, 0px) !important;
+}
+
+.meteogram-fullscreen--no-controls.meteogram-fullscreen--camera-right .meteogram-footer-row {
+  padding-left: var(--safe-area-x, 0px) !important;
+}
+
+.meteogram-fullscreen__scroll {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.meteogram-fullscreen .dialog__body {
+  overflow: hidden;
+}
+
+/* On a phone two fingers zoom the time axis, not the page (REQ-563); one finger still places the cursor line. */
+.meteogram-fullscreen--no-controls .meteogram-fullscreen__scroll {
+  touch-action: none;
+}
+
+/*
+ * On a phone the tooltip is a side bar (REQ-557): at the edge of the screen away from the finger, over the screen's
+ * whole height, without gap or rounded corners; clear of a notch. Its width stays while the view is open (REQ-584):
+ * MeteogramFullscreen.tsx sets the content's width and the side padding (`--side-bar-width`, `--side-bar-padding`),
+ * at most a quarter of the screen together; a notch's inset comes on top. Without them it is as wide as its content.
+ */
+.meteogram-fullscreen--no-controls .hover-unified-tooltip {
+  position: fixed !important;
+  top: 0 !important;
+  bottom: 0;
+  box-sizing: content-box !important;
+  width: var(--side-bar-width, max-content) !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  padding-inline: var(--side-bar-padding, 0.95em) !important;
+  overflow: hidden;
+  border-block: 0 !important;
+  border-radius: 0 !important;
+}
+
+.meteogram-fullscreen--no-controls .hover-unified-tooltip[data-side="left"] {
+  left: 0 !important;
+  border-left: 0 !important;
+  padding-left: max(var(--side-bar-padding, 0.95em), env(safe-area-inset-left)) !important;
+}
+
+.meteogram-fullscreen--no-controls .hover-unified-tooltip[data-side="right"] {
+  left: auto !important;
+  right: 0;
+  border-right: 0 !important;
+  padding-right: max(var(--side-bar-padding, 0.95em), env(safe-area-inset-right)) !important;
+}
+
+/*
+ * In the side bar every label stands on one line with its value, the label at the left, the value at the right, and
+ * nothing wraps (REQ-588): the bar is as wide as its widest row at a long value or its date (MeteogramFullscreen.tsx).
+ * The model name and the run do not widen it: MeteogramFullscreen puts the short model name there when the full one
+ * does not fit, or cuts it with "…"; a run too long ends in "…" as well. Its font size fills the screen's height as far
+ * as the width allows (MeteogramFullscreen.tsx); lines closer than on the page leave it more room.
+ */
+.meteogram-fullscreen--no-controls .hover-unified-tooltip {
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.meteogram-fullscreen--no-controls .hover-unified-tooltip .tooltip-row {
+  align-items: baseline !important;
+  gap: 0.6em !important;
+}
+
+.meteogram-fullscreen--no-controls .hover-unified-tooltip .tooltip-section-title {
+  width: 0;
+  min-width: 100%;
+  overflow: hidden;
+}
+
+.meteogram-fullscreen--no-controls .hover-unified-tooltip .tooltip-run-info {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meteogram-fullscreen__chart {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/*
+ * On a phone the row below the chart (place, graupel.eu, data source) is as large as the temperature extremes in the
+ * chart on screen (REQ-587), set by MeteogramFullscreen.tsx (`--meteogram-extremes-font-size`). Its lines shrink
+ * in the row's own proportion (14 px for 11 px text); the chart takes the height. The core sets the row's size inline.
+ */
+.meteogram-fullscreen--no-controls .meteogram-footer-row {
+  font-size: var(--meteogram-extremes-font-size, 11px) !important;
+  line-height: calc(var(--meteogram-extremes-font-size, 11px) * 14 / 11) !important;
+}
+
+/*
+ * The page behind the open view does not scroll (REQ-530): otherwise a swipe on the view scrolls it and shows its scroll
+ * bar over the view (iOS). Root and body take the viewport's height, so the page has nothing left to scroll; the
+ * component puts the scroll position back on closing.
+ */
+html.meteogram-fullscreen-open,
+html.meteogram-fullscreen-open body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* Absolutely placed elements of the page (e.g. visually hidden headings) are clipped by the body as well. */
+html.meteogram-fullscreen-open body {
+  position: relative;
+}
+
+.dialog.meteogram-fullscreen {
+  overscroll-behavior: contain;
+}
+
+/*
+ * Phones (REQ-529): no card around the meteogram; it stands on the page like the chains and the slider. It reaches from
+ * the screen's left edge to its right edge, over the page's side margins (REQ-547).
+ */
+@container app (max-width: 40rem) {
+  .meteogram-card.region {
+    margin-inline: calc(-1 * var(--page-gutter));
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /*
+   * REQ-615: the chart draws its model headers a few viewBox units below its top edge, with nothing above them, while
+   * the day row without them starts at that edge. The chart moves up by that much (`--meteogram-top-room`, a share of
+   * its width set by MeteogramPanel, 0 without model headers), so its first row follows the day slider's grips as
+   * closely as the slider the place row (DaySlider.css). A margin's percentage refers to the region's width: the chart
+   * is as wide, but at least 40rem; on a phone in portrait it is that width times its width factor.
+   */
+  .meteogram__scroll {
+    margin-top: calc(-1 * max(100%, 40rem) * var(--meteogram-top-room, 0));
+  }
+
+  .meteogram__scroll--portrait {
+    margin-top: calc(-100% * var(--meteogram-width-factor, 1) * var(--meteogram-top-room, 0));
+  }
+}
+
+/* Tablet (REQ-728, REQ-742): the same rules by the class, without style queries. */
+:where(.app--tablet) .meteogram-card.region {
+  margin-inline: calc(-1 * var(--page-gutter));
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/*
+ * REQ-615: the chart draws its model headers a few viewBox units below its top edge, with nothing above them, while
+ * the day row without them starts at that edge. The chart moves up by that much (`--meteogram-top-room`, a share of
+ * its width set by MeteogramPanel, 0 without model headers), so its first row follows the day slider's grips as
+ * closely as the slider the place row (DaySlider.css). A margin's percentage refers to the region's width: the chart
+ * is as wide, but at least 40rem; on a phone in portrait it is that width times its width factor.
+ */
+:where(.app--tablet) .meteogram__scroll {
+  margin-top: calc(-1 * max(100%, 40rem) * var(--meteogram-top-room, 0));
+}
+
+:where(.app--tablet) .meteogram__scroll--portrait {
+  margin-top: calc(-100% * var(--meteogram-width-factor, 1) * var(--meteogram-top-room, 0));
+}
+
+/*
+ * Info buttons in the model headers while the weather chain is hidden (REQ-643): a layer at the top-left corner of the
+ * chart's container, each button placed by ModelHeaderInfo.tsx right of the model's name, in the colour of the name.
+ * Its popover is the chain card's (`.model-info`, ModelChain.css), a little below the button.
+ */
+.model-header-info {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+}
+
+.model-header-info__item {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+}
+
+.model-header-info__item .icon-button {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 50%;
+}
+
+/* A larger target for a finger than the small icon. */
+.model-header-info__item .icon-button::after {
+  position: absolute;
+  inset: -0.375rem;
+  content: "";
+}
+
+.model-header-info__item .model-info {
+  margin-top: var(--space-1);
+}
+
+/*
+ * The tablet's close button in the full-screen view (REQ-750): no column of its own, laid over the chart by
+ * FullscreenClose.tsx in the right corner of the last model header, or left of the place name in the row below the
+ * chart, in the colour of the text beside it. Until it is measured, at the top right corner. It stays above the side
+ * bar of the tooltip (REQ-557, z-index 1000 in the core), which covers the screen's whole height at one side: the
+ * button is always seen where a tap closes the view.
+ */
+.fullscreen-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1001;
+  display: flex;
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--color-text-muted);
+}
+
+.fullscreen-close__button.icon-button {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 50%;
+}
+
+/*
+ * No frame around the X (REQ-762): not when the view opens and focuses it, not on a tap or a click, neither the focus
+ * ring (outline, box-shadow) nor the touch screen's highlight. Only after a key (`data-keyboard`, FullscreenClose.tsx)
+ * a ring of its own in the icon's colour, not the system's blue, shows where the keyboard's focus is.
+ */
+.fullscreen-close,
+.fullscreen-close__button.icon-button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fullscreen-close__button.icon-button:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.fullscreen-close__button.icon-button[data-keyboard]:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
+/* A target for a finger of at least the size of the other icon buttons (2.5rem), larger than the small icon. */
+.fullscreen-close__button.icon-button::after {
+  position: absolute;
+  inset: min(-0.375rem, calc((100% - 2.5rem) / 2));
+  content: "";
+}
+
+/*
+ * Without model headers the row below the chart moves right by the close button and its gap (`--fullscreen-close-room`,
+ * set by FullscreenClose.tsx), so the button stands before the place name; the name ends in "…" where the row is too
+ * narrow (the core's `text-overflow: ellipsis`). The core sets the row's padding inline, so a margin adds to it.
+ */
+.meteogram-fullscreen__scroll .meteogram-footer-row {
+  margin-left: var(--fullscreen-close-room, 0px);
+}
+
+/*
+ * Pull to refresh on a phone in portrait (REQ-638, usePullToRefresh.ts): only the meteogram follows the finger down,
+ * the place row and the day slider above stay. There is no arrow over the chart: the day slider's box shows the refresh
+ * symbol while pulling and "Loading forecast…" while the forecast loads anew (REQ-737, DaySlider.css). After the release
+ * the chart moves straight back to its place. Meanwhile its bottom is clipped at the card's bottom edge, so it does not
+ * slide over the footer.
+ */
+.meteogram-card--pull {
+  position: relative;
+}
+
+.meteogram-card--pull .meteogram {
+  transition: transform 0.25s ease-out;
+}
+
+.meteogram-card--pull[data-pull] .meteogram {
+  transform: translateY(var(--meteogram-pull, 0px));
+  transition: none;
+}
+
+.meteogram-card--pull:is([data-pull], [data-pull-settling]) {
+  clip-path: polygon(-100vw -100vh, 200vw -100vh, 200vw 100%, -100vw 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meteogram-card--pull .meteogram {
+    transition: none;
+  }
+}
+
+/*
+ * While a finger is on the page, the browser does not pull it to refresh it itself (REQ-638): the page's own pull
+ * reloads the forecast, from the chart or anywhere at the top of the page (REQ-750).
+ */
+html[data-meteogram-touch],
+html[data-meteogram-touch] body {
+  overscroll-behavior-y: none;
+}
+
+/*
+ * Legend (REQ-639, MeteogramLegend.tsx): what the chart draws, each with its symbol; an X at the top right closes it.
+ * On the desktop it floats left of the meteogram card in the page's free margin, at the card's top, without covering
+ * the chart; MeteogramPanel sets its width from that room and leaves it out where the room is too narrow. On a narrow
+ * page it is a card of its own directly above the meteogram, compact in two columns, so the page still fits the
+ * screen (REQ-608); it stays in place while the meteogram is pulled down (REQ-638).
+ */
+.meteogram-card:has(> .meteogram-legend--side) {
+  position: relative;
+}
+
+.meteogram-legend {
+  position: relative;
+  box-sizing: border-box;
+  color: var(--color-text);
+  font-size: 12px;
+  line-height: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.meteogram-legend--side {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 8px);
+  z-index: 1;
+  padding: var(--space-2) var(--space-2) var(--space-2) 10px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+}
+
+.meteogram-legend__title {
+  margin: 0 1.75rem var(--space-1) 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.meteogram-legend__close.icon-button {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--color-text-muted);
+}
+
+/* A larger target for a finger than the small button. */
+.meteogram-legend__close.icon-button::after {
+  position: absolute;
+  inset: -0.25rem;
+  content: "";
+}
+
+.meteogram-legend__items {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * The groups of the legend, one for each area of the meteogram (REQ-674): one below the other, set apart by a fine line
+ * in the colour of the cards' borders.
+ */
+.meteogram-legend__items + .meteogram-legend__items {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--color-border);
+}
+
+.meteogram-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: break-word;
+  hyphens: manual;
+}
+
+.meteogram-legend__item > span {
+  min-width: 0;
+}
+
+.meteogram-legend__swatch {
+  flex: none;
+  overflow: visible;
+}
+
+/*
+ * As far from the meteogram's first row below as from the day slider's grips above, 10 instead of the page's 12 px, as
+ * the slider keeps it (REQ-607, REQ-615, DaySlider.css).
+ */
+.meteogram-legend--card {
+  margin-bottom: calc(0.625rem - var(--space-3));
+  padding: 5px 2rem 5px 10px;
+}
+
+.meteogram-legend--card .meteogram-legend__items {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--space-3);
+  row-gap: 1px;
+}
+
+/*
+ * The narrow page's card keeps its height low for the chart (REQ-608): its groups (REQ-674) fill two columns as
+ * newspaper columns, one below the other in the legend's order and never split, each in one column of entries. A fine
+ * line above each group sets it apart; the line of a group at the top of a column is cut off with the space above it.
+ */
+.meteogram-legend--card:not(.meteogram-legend--wide):not(.meteogram-legend--columns) .meteogram-legend__groups {
+  --legend-line-gap: 3px;
+  columns: 2;
+  column-gap: var(--space-3);
+  margin: calc(-1 * var(--legend-line-gap) - 1px) 0 calc(-1 * var(--legend-line-gap));
+  clip-path: inset(calc(var(--legend-line-gap) + 1px) 0 0 0);
+}
+
+.meteogram-legend--card:not(.meteogram-legend--wide):not(.meteogram-legend--columns) .meteogram-legend__items,
+.meteogram-legend--card:not(.meteogram-legend--wide):not(.meteogram-legend--columns)
+  .meteogram-legend__items
+  + .meteogram-legend__items {
+  grid-template-columns: minmax(0, 1fr);
+  break-inside: avoid;
+  margin: 0;
+  padding: var(--legend-line-gap) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+/*
+ * The card on a tablet in landscape, as wide as the page (REQ-756, REQ-763): its four columns (MeteogramLegend's
+ * `legendColumns`) share the width evenly, set apart by a fine upright line; two groups of one kind in one column by a
+ * fine line between them, as on the phone's card. So the card is no higher than its longest column.
+ */
+.meteogram-legend--columns .meteogram-legend__groups {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  column-gap: var(--space-3);
+}
+
+.meteogram-legend--columns .meteogram-legend__column + .meteogram-legend__column {
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--color-border);
+}
+
+.meteogram-legend--card.meteogram-legend--columns .meteogram-legend__items {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.meteogram-legend--columns .meteogram-legend__items + .meteogram-legend__items {
+  margin-top: 3px;
+  padding-top: 3px;
+}
+
+/*
+ * Desktop with too narrow a margin for the legend beside the meteogram (REQ-670): the card above the meteogram, as wide
+ * as it and looking like the page's other cards, at the page's usual gap. Its groups (REQ-674) stand side by side, each
+ * in columns of two entries, set apart by a fine upright line; where the card is too narrow for all of them, the rest
+ * go on below. The groups are shifted left by their gap and line and cut off there: no line before a row's first
+ * group.
+ */
+.meteogram-legend--wide {
+  margin-bottom: 0;
+  padding: 6px 2.25rem 6px var(--space-3);
+  box-shadow: var(--shadow-surface);
+}
+
+.meteogram-legend--wide .meteogram-legend__groups {
+  --legend-gap: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 6px;
+  margin-left: calc(-1 * var(--legend-gap) - 1px);
+  clip-path: inset(0 0 0 calc(var(--legend-gap) + 1px));
+}
+
+.meteogram-legend--wide .meteogram-legend__items,
+.meteogram-legend--wide .meteogram-legend__items + .meteogram-legend__items {
+  grid-template-rows: repeat(2, auto);
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(7.5rem, max-content);
+  align-content: start;
+  column-gap: var(--legend-gap);
+  margin: 0;
+  padding: 0 var(--legend-gap);
+  border-top: 0;
+  border-left: 1px solid var(--color-border);
+}

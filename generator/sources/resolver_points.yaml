@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Bastian Schnitzler
+# SPDX-License-Identifier: MPL-2.0
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# Prüfpunkte des Resolvers (graupel-gen regions schreibt resolver_cases.json).
+#
+# Je Punkt: name, lat, lon; optional region (erwartete Region, null = keine)
+# und reason (region, domain_fallback, global_fallback). Die Tests prüfen die
+# Erwartungen, resolver_cases.json enthält die aufgelösten Ketten.
+points:
+  - {name: Zugspitze, lat: 47.421, lon: 10.985, region: northern_alps, reason: region}
+  - {name: Watzmann, lat: 47.554, lon: 12.923, region: eastern_alps, reason: region}
+  - {name: Berchtesgaden, lat: 47.631, lon: 13.002, region: eastern_alps, reason: region}
+  - {name: Garmisch-Partenkirchen, lat: 47.492, lon: 11.096, region: northern_alps, reason: region}
+  - {name: Ortler, lat: 46.508, lon: 10.542, region: dolomites, reason: region}
+  - {name: Matterhorn, lat: 45.9765, lon: 7.6586, region: western_alps_ch, reason: region}
+  - {name: Mont Blanc, lat: 45.8326, lon: 6.8652, region: western_alps_fr, reason: region}
+  - {name: Courmayeur, lat: 45.79, lon: 6.97, region: western_alps_fr, reason: region}
+  - {name: München, lat: 48.137, lon: 11.576, region: germany, reason: region}
+  - {name: Wien, lat: 48.208, lon: 16.373, region: austria, reason: region}
+  - {name: Sölden, lat: 46.9655, lon: 11.0076, region: austria, reason: region}
+  - {name: Innsbruck, lat: 47.2692, lon: 11.4041, region: austria, reason: region}
+  - {name: Großglockner, lat: 47.0742, lon: 12.6947, region: austria, reason: region}
+  - {name: Paris, lat: 48.857, lon: 2.352, region: france, reason: region}
+  - {name: New York, lat: 40.713, lon: -74.006, region: usa, reason: region}
+  - {name: Chicago, lat: 41.878, lon: -87.630, region: usa, reason: region}
+  - {name: Denver, lat: 39.739, lon: -104.990, region: usa, reason: region}
+  - {name: Miami, lat: 25.762, lon: -80.192, region: usa, reason: region}
+  - {name: Tromsø, lat: 69.65, lon: 18.96, region: nordic, reason: region}
+  - {name: Kehl, lat: 48.57, lon: 7.81, region: germany, reason: region}
+  - {name: Straßburg, lat: 48.58, lon: 7.75, region: france, reason: region}
+  - {name: Anchorage, lat: 61.22, lon: -149.9, region: usa, reason: region}
+  - {name: Taipeh, lat: 25.03, lon: 121.56, region: null, reason: domain_fallback}
+  - {name: Mittelatlantik, lat: 40.0, lon: -35.0, region: null, reason: global_fallback}
+  - {name: Longyearbyen, lat: 78.22, lon: 15.65}
+  - {name: Pjöngjang, lat: 39.03, lon: 125.75}
+  - {name: Tunis, lat: 36.8, lon: 10.18}
+  - {name: Golf von Guinea, lat: 0.0, lon: 0.0}

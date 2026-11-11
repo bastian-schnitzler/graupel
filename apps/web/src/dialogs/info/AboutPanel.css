@@ -1,0 +1,74 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* About tab of the info popup (REQ-424): the only place with the logo. */
+.about__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.about__logo {
+  flex: none;
+  width: 4rem;
+  height: 4rem;
+}
+
+.about__name {
+  margin: 0;
+  font-size: var(--font-size-lg);
+}
+
+.about__description {
+  margin: 0 0 var(--space-4);
+}
+
+.about__facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+}
+
+.about__facts dt {
+  color: var(--color-text-muted);
+}
+
+.about__facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Licence of the weather data and how Graupel changed them (REQ-478), below the source. */
+.about__data-license {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+@media (max-width: 30rem) {
+  .about__facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .about__facts dd + dt {
+    margin-top: var(--space-2);
+  }
+}
+
+.about a {
+  color: var(--color-accent);
+}
+
+/* Third-party licenses: looks like the links next to it, opens a popup instead of the file (REQ-514). */
+.about__popup-link {
+  padding: 0;
+  font: inherit;
+  color: var(--color-accent);
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}

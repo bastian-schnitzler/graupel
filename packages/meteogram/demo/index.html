@@ -1,0 +1,49 @@
+<!doctype html>
+<!--
+  SPDX-License-Identifier: MPL-2.0
+  This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was
+  not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Meteogram demo</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root { color-scheme: light; --page: #f1f5f9; --card: #ffffff; --text: #0f172a; --muted: #475569; }
+      :root[data-theme="dark"] { color-scheme: dark; --page: #020617; --card: #0f172a; --text: #e2e8f0; --muted: #94a3b8; }
+      body { margin: 0; padding: 16px; background: var(--page); color: var(--text);
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+      main { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+      .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      .toolbar button, .toolbar select { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 6px;
+        border: 1px solid var(--muted); background: var(--card); color: var(--text); cursor: pointer; }
+      .toolbar button[aria-pressed="true"] { outline: 2px solid #f59e0b; }
+      #chart { background: var(--card); border-radius: 10px; padding: 8px; height: 520px; }
+      #status { font-size: 12px; color: var(--muted); min-height: 1.5em; }
+      img { max-width: 100%; border: 1px solid var(--muted); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>@graupel/meteogram</h1>
+      <div class="toolbar">
+        <span>Days:</span>
+        <span id="days"></span>
+        <select id="layout" aria-label="Layout">
+          <option value="power-default">power-default</option>
+          <option value="normal-default">normal-default</option>
+        </select>
+        <button id="theme" type="button">Dark theme</button>
+        <button id="zoom" type="button" aria-pressed="true">Wheel zoom</button>
+        <button id="png" type="button">Export PNG</button>
+        <button id="destroy" type="button">Destroy</button>
+      </div>
+      <div id="chart" data-testid="demo-chart"></div>
+      <div id="status" data-testid="demo-status"></div>
+      <div id="export"></div>
+    </main>
+    <script type="module" src="./demo.js"></script>
+  </body>
+</html>

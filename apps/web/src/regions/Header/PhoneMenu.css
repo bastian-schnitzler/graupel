@@ -1,0 +1,136 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * The phone's menu (REQ-575, REQ-580, REQ-582): its button at the end of the place row, a panel below it at the right
+ * edge, over the page, so opening it moves nothing (REQ-574). In the page's own font size, so iOS does not zoom into
+ * the language field.
+ */
+.phone-menu {
+  position: relative;
+  display: flex;
+}
+
+.phone-menu__button {
+  color: var(--color-text-muted);
+}
+
+.phone-menu__button[aria-expanded="true"] {
+  color: var(--color-text);
+  background: var(--color-surface-muted);
+}
+
+.phone-menu__panel {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: max-content;
+  min-width: 13rem;
+  max-width: calc(100vw - 2 * var(--page-gutter));
+  padding: var(--space-1);
+  font-size: var(--font-size-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--tooltip-shadow);
+}
+
+.phone-menu__panel[hidden] {
+  display: none;
+}
+
+.phone-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 2.75rem;
+  padding: 0 var(--space-3);
+  font: inherit;
+  color: var(--color-text);
+  text-align: start;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+/* Not on "Install app", which keeps its own look (below). */
+@media (hover: hover) {
+  .phone-menu__item:not(.phone-menu__item--install):hover {
+    background: var(--color-surface-muted);
+  }
+}
+
+.phone-menu__item .icon {
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+/* Gold clock of "History" with the current values, as the desktop's clock (REQ-757). */
+.phone-menu__item--history-current .icon {
+  color: #b7791f;
+}
+
+.phone-menu__no-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* "Install app" stands out like the header bar's download button (REQ-582). */
+.phone-menu__item--install {
+  font-weight: 600;
+  color: var(--color-accent-contrast);
+  background: var(--color-accent);
+}
+
+.phone-menu__item--install .icon {
+  color: inherit;
+}
+
+.phone-menu__divider {
+  width: 100%;
+  margin: var(--space-1) 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Language field as in the header bar (REQ-526): globe inside on the left, own arrow on the right. */
+.phone-menu__language {
+  position: relative;
+  display: flex;
+  margin-bottom: var(--space-1);
+  color: var(--color-text-muted);
+}
+
+/* Two classes, so it wins over `.field` from global.css, which loads after this file. */
+.phone-menu__language .phone-menu__select {
+  width: 100%;
+  min-width: 0;
+  height: 2.75rem;
+  padding-block: 0;
+  padding-inline: calc(var(--space-3) + 20px + var(--space-3)) 2rem;
+  color: var(--color-text);
+  cursor: pointer;
+  appearance: none;
+}
+
+.phone-menu__globe,
+.phone-menu__chevron {
+  position: absolute;
+  top: 50%;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.phone-menu__globe {
+  inset-inline-start: var(--space-3);
+}
+
+.phone-menu__chevron {
+  inset-inline-end: var(--space-2);
+  width: 16px;
+  height: 16px;
+}

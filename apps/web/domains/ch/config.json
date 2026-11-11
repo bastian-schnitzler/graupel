@@ -1,0 +1,26 @@
+{
+  "$schema": "../../config.schema.json",
+  "domain": "graupel.ch",
+  "startLocation": {"name": "Matterhorn", "lat": 45.9763, "lon": 7.6586, "elevation": 4478},
+  "timeZone": "Europe/Zurich",
+  "modelChain": true,
+  "modelHeaders": true,
+  "daySlider": {"enabled": true, "days": "all"},
+  "favorites": {
+    "enabled": true,
+    "presets": []
+  },
+  "map": "opentopomap",
+  "languages": ["de", "en", "fr", "it", "sl", "cs", "nl", "da"],
+  "defaultLanguage": "de",
+  "legal": {
+    "hosting": "all-inkl",
+    "imprint": {
+      "name": "Bastian Schnitzler",
+      "email": "baschni@gmx.de"
+    },
+    "privacy": {
+      "swissNotice": true
+    }
+  }
+}

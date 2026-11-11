@@ -1,0 +1,224 @@
+# SPDX-FileCopyrightText: 2026 Bastian Schnitzler
+# SPDX-License-Identifier: MPL-2.0
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# Kuratierte Regionen mit Präferenzketten (graupel-gen regions).
+#
+# Reihenfolge zählt: Beim Zusammenlegen der Geometrien behält die frühere
+# Region überlappende Küstengewässer.
+#
+# Je Region:
+#   id, name        Kennung und Anzeigename
+#   priority        30: Alpenregionen (gewinnen gegen Länder), 20: Länder
+#   group           Gruppe im Viewer (ohne Angabe Europe)
+#   countries       ISO-A2-Codes aus Natural Earth 10 m Admin-0 (in Anführungszeichen:
+#                   YAML liest NO sonst als false); die Region ist
+#                   ihre Vereinigung samt Küstengewässern (bis 1,0° vor der
+#                   Küste, an der Mittellinie geteilt)
+#   alpine          Alpenregion: Bauweise (build), Polygon (lon, lat) und die
+#                   Länder, auf die sie zugeschnitten wird; Bauweisen:
+#                   polygon                 Polygon ∩ Länder
+#                   north_of_d2_edge        zwischen alps_d2_south_edge und
+#                                           alps_north_edge; westlich von
+#                                           kufstein_lon ∩ alle Länder, östlich
+#                                           davon ∩ erstes Land
+#                   german_alps_south_west  Länder südlich von
+#                                           alps_d2_south_edge, westlich von
+#                                           inzell_lon
+#                   eastern_alps            Polygon ∩ übrige Länder, dazu das
+#                                           erste Land südlich des Rands und
+#                                           östlich von inzell_lon
+#   main, cloud     Präferenzketten (Modell-IDs des Katalogs); der Resolver
+#                   streicht Modelle, deren Gebiet den Punkt nicht abdeckt
+#                   oder die den Horizont nicht verlängern
+#   chains_from     übernimmt die Ketten einer anderen Region
+
+# Südrand des ICON-D2-Gebiets in den Alpen (lon, lat), West nach Ost: Breite von
+# Oberstdorf, unter der Zugspitze, unter Garmisch-Partenkirchen, Kufstein, unter
+# Inzell, dann hinauf zum Hals deutschen Gebiets zwischen Bad Reichenhall und
+# dem Berchtesgadener Becken (Grossgmain).
+alps_d2_south_edge: [[9.5, 47.4], [10.28, 47.4], [10.95, 47.405], [11.02, 47.415], [11.1, 47.45], [12.17, 47.58], [12.75, 47.7], [12.892, 47.7235]]
+# Die Nördlichen Alpen reichen bis zu dieser Linie.
+alps_north_edge: [[12.95, 47.85], [9.5, 47.75]]
+# Östlich von Kufstein bleiben die Nördlichen Alpen auf deutschem Gebiet.
+kufstein_lon: 12.17
+# Deutsches Gebiet südlich des Rands und östlich davon (Berchtesgaden) gehört
+# zu den Östlichen Alpen.
+inzell_lon: 12.75
+
+regions:
+  # Nördlich des ICON-D2-Südrands.
+  - id: northern_alps
+    name: "Northern Alps"
+    priority: 30
+    alpine:
+      build: north_of_d2_edge
+      countries: ["DE", "AT"]
+    chains_from: germany
+  # Östlich der Saalach: Berchtesgaden, Watzmann, Salzburg, Tauern, Salzkammergut;
+  # Wien bleibt bei Österreich.
+  - id: eastern_alps
+    name: "Eastern Alps"
+    priority: 30
+    alpine:
+      build: eastern_alps
+      polygon: [[12.85, 46.65], [15.9, 46.65], [15.9, 47.9], [12.85, 47.9]]
+      countries: ["DE", "AT"]
+    chains_from: austria
+  # Deutsche Alpen südlich des Rands, westlich von Inzell (Allgäu südlich von
+  # Oberstdorf, Wetterstein, Karwendel, Chiemgau): Kette Österreichs.
+  - id: bavarian_alps_south
+    name: "Bavarian Alps (south)"
+    priority: 30
+    alpine:
+      build: german_alps_south_west
+      countries: ["DE"]
+    chains_from: austria
+  # Südlich des Hauptkamms, Ortler bis Karnische Alpen.
+  - id: dolomites
+    name: "Dolomites"
+    priority: 30
+    alpine:
+      build: polygon
+      polygon: [[10.2, 45.8], [12.9, 45.8], [12.9, 46.65], [12.2, 46.9], [11.3, 47.0], [10.45, 46.85], [10.2, 46.6]]
+      countries: ["IT"]
+    main: [italia_meteo_arpae_icon_2i, icon_eu, ecmwf_ifs]
+    cloud: [icon_d2, icon_eu, ecmwf_ifs025]
+  # Wallis nördlich des Hauptkamms: Zermatt, Matterhorn.
+  - id: western_alps_ch
+    name: "Western Alps (CH)"
+    priority: 30
+    alpine:
+      build: polygon
+      polygon: [[6.8, 46.1], [7.0, 45.95], [7.66, 45.955], [8.2, 45.98], [8.45, 46.3], [8.1, 46.5], [7.2, 46.45], [6.8, 46.4]]
+      countries: ["CH"]
+    chains_from: switzerland
+  # Savoyen, Haute-Savoie, Dauphiné und Aostatal: Mont Blanc, Chamonix,
+  # Courmayeur, Breuil-Cervinia.
+  - id: western_alps_fr
+    name: "Western Alps (FR)"
+    priority: 30
+    alpine:
+      build: polygon
+      polygon: [[5.6, 44.7], [6.9, 44.7], [7.3, 45.2], [7.95, 45.5], [7.95, 45.94], [7.0, 45.94], [6.95, 46.05], [6.8, 46.3], [6.3, 46.4], [5.6, 46.2]]
+      countries: ["FR", "IT"]
+    main: [meteofrance_arome_france_hd, meteoswiss_icon_ch2, ecmwf_ifs]
+    cloud: [meteofrance_arome_france, icon_eu, ecmwf_ifs025]
+  - id: germany
+    name: "Germany"
+    priority: 20
+    countries: ["DE"]
+    main: [icon_d2, icon_eu, ecmwf_ifs]
+    cloud: [icon_d2, icon_eu, ecmwf_ifs025]
+  - id: austria
+    name: "Austria"
+    priority: 20
+    countries: ["AT"]
+    main: [geosphere_claef_austria, icon_eu, ecmwf_ifs]
+    cloud: [icon_d2, icon_eu, ecmwf_ifs025]
+  - id: switzerland
+    name: "Switzerland"
+    priority: 20
+    countries: ["CH", "LI"]
+    main: [meteoswiss_icon_ch1, meteoswiss_icon_ch2, ecmwf_ifs]
+    cloud: [icon_d2, icon_eu, ecmwf_ifs025]
+  - id: france
+    name: "France"
+    priority: 20
+    countries: ["FR", "MC"]
+    main: [meteofrance_arome_france_hd, meteofrance_arpege_europe, ecmwf_ifs]
+    cloud: [meteofrance_arome_france, meteofrance_arpege_europe, ecmwf_ifs025]
+  - id: italy
+    name: "Italy"
+    priority: 20
+    countries: ["IT", "SM", "VA", "MT"]
+    main: [italia_meteo_arpae_icon_2i, icon_eu, ecmwf_ifs]
+    cloud: [icon_d2, icon_eu, ecmwf_ifs025]
+  - id: uk
+    name: "United Kingdom & Ireland"
+    priority: 20
+    countries: ["GB", "IE", "IM", "GG", "JE"]
+    main: [ukmo_uk_deterministic_2km, ukmo_global_deterministic_10km, ecmwf_ifs]
+    cloud: [ukmo_uk_deterministic_2km, ukmo_global_deterministic_10km, ecmwf_ifs025]
+  - id: benelux
+    name: "Benelux"
+    priority: 20
+    countries: ["NL", "BE", "LU"]
+    main: [knmi_harmonie_arome_netherlands, icon_eu, ecmwf_ifs]
+    cloud: [icon_d2, icon_eu, ecmwf_ifs025]
+  - id: denmark
+    name: "Denmark"
+    priority: 20
+    countries: ["DK"]
+    main: [dmi_harmonie_arome_europe, icon_eu, ecmwf_ifs]
+    cloud: [icon_d2, icon_eu, ecmwf_ifs025]
+  - id: nordic
+    name: "Nordic & Baltic"
+    priority: 20
+    countries: ["NO", "SE", "FI", "AX", "EE", "LV", "LT", "FO"]
+    main: [metno_nordic, icon_eu, cmc_gem_rdps, ecmwf_ifs]
+    cloud: [icon_eu, cmc_gem_rdps, ecmwf_ifs025]
+  - id: iberia
+    name: "Iberia"
+    priority: 20
+    countries: ["ES", "PT", "AD", "GI"]
+    main: [meteofrance_arome_france_hd, icon_eu, ecmwf_ifs]
+    cloud: [meteofrance_arome_france, icon_eu, ecmwf_ifs025]
+  - id: central_eastern_europe
+    name: "Central Eastern Europe"
+    priority: 20
+    countries: ["CZ", "SK", "HU", "SI", "HR"]
+    main: [geosphere_claef_austria, icon_eu, ecmwf_ifs]
+    cloud: [icon_d2, icon_eu, ecmwf_ifs025]
+  - id: western_balkans
+    name: "Western Balkans"
+    priority: 20
+    countries: ["BA", "ME", "AL", "XK", "RS", "MK"]
+    main: [italia_meteo_arpae_icon_2i, icon_eu, ecmwf_ifs]
+    cloud: [icon_eu, ecmwf_ifs025]
+  - id: poland
+    name: "Poland"
+    priority: 20
+    countries: ["PL"]
+    main: [dmi_harmonie_arome_europe, icon_eu, ecmwf_ifs]
+    cloud: [icon_d2, icon_eu, ecmwf_ifs025]
+  - id: iceland
+    name: "Iceland"
+    priority: 20
+    countries: ["IS"]
+    main: [dmi_harmonie_arome_europe, icon_eu, ecmwf_ifs]
+    cloud: [icon_eu, ecmwf_ifs025]
+  - id: usa
+    name: "USA"
+    priority: 20
+    group: North America
+    countries: ["US", "PR", "VI"]
+    # RRFS (Nachfolger von HRRR, REQ-768) reicht über CONUS bis 84 h, dann
+    # NBM (statistischer Blend, ohne Druckflächen) bis 264 h; Alaska bekommt
+    # nur HRDPS / RDPS.
+    main: [ncep_rrfs_conus, cmc_gem_hrdps, cmc_gem_rdps, ncep_nbm_conus, ecmwf_ifs]
+    cloud: [ncep_rrfs_conus, cmc_gem_hrdps, cmc_gem_rdps, ecmwf_ifs025]
+  - id: canada
+    name: "Canada"
+    priority: 20
+    group: North America
+    countries: ["CA", "PM"]
+    main: [cmc_gem_hrdps, ncep_rrfs_conus, cmc_gem_rdps, ecmwf_ifs]
+    cloud: [cmc_gem_hrdps, ncep_rrfs_conus, cmc_gem_rdps, ecmwf_ifs025]
+  - id: japan
+    name: "Japan"
+    priority: 20
+    group: Asia
+    countries: ["JP"]
+    main: [jma_msm, ecmwf_ifs]
+    cloud: [jma_msm, ecmwf_ifs025]
+  - id: korea
+    name: "Korea"
+    priority: 20
+    group: Asia
+    countries: ["KR", "KP"]
+    main: [jma_msm, ecmwf_ifs]
+    cloud: [jma_msm, ecmwf_ifs025]

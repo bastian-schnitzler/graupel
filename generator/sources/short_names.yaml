@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: 2026 Bastian Schnitzler
+# SPDX-License-Identifier: MPL-2.0
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# Kuratierte Kurznamen (Katalogfeld short_name) für den Modellkopf.
+# Nur Modelle, deren Name länger als 10 Zeichen ist, bekommen einen;
+# "SL" = Seamless. Alle anderen haben short_name null (die App zeigt den Namen).
+
+cma_grapes_global: "GRAPES"
+dmi_seamless: "DMI SL"
+dmi_harmonie_arome_europe: "DMI HARM"
+icon_seamless: "ICON SL"
+icon_global: "ICON"
+ecmwf_ifs: "IFS HRES"
+ecmwf_ifs025: "IFS"
+ecmwf_aifs025_single: "AIFS"
+cmc_gem_seamless: "GEM SL"
+cmc_gem_rdps: "RDPS"
+cmc_gem_hrdps: "HRDPS"
+cmc_gem_hrdps_west: "HRDPS W"
+geosphere_seamless: "GeoS SL"
+geosphere_arome_austria: "AROME AT"
+geosphere_claef_austria: "C-LAEF"
+italia_meteo_arpae_icon_2i: "ICON-2I"
+jma_seamless: "JMA SL"
+knmi_seamless: "KNMI SL"
+knmi_harmonie_arome_europe: "KNMI HARM"
+knmi_harmonie_arome_netherlands: "KNMI HARM NL"
+metno_seamless: "MetNo SL"
+metno_nordic: "MetNo"
+meteoswiss_icon_seamless: "ICON-CH SL"
+meteoswiss_icon_ch1: "ICON-CH1"
+meteoswiss_icon_ch2: "ICON-CH2"
+meteofrance_seamless: "MF SL"
+meteofrance_arpege_world: "ARPEGE"
+meteofrance_arpege_europe: "ARPEGE EU"
+meteofrance_arome_france: "AROME FR"
+meteofrance_arome_france_hd: "AROME HD"
+ncep_gfs_seamless: "GFS SL"
+ncep_gfs_global: "GFS"
+ncep_aigfs025: "AIGFS"
+ncep_hgefs025_ensemble_mean: "HGEFS Mean"
+ncep_rrfs_conus: "RRFS"
+ukmo_seamless: "UKMO SL"
+ukmo_global_deterministic_10km: "UKMO 10km"
+ukmo_uk_deterministic_2km: "UKMO UK"

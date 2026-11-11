@@ -1,0 +1,27 @@
+{
+  "$schema": "../../config.schema.json",
+  "domain": "graupel.eu",
+  "startLocation": {"name": "Brussels", "lat": 50.8467, "lon": 4.3525, "elevation": 57},
+  "timeZone": "Europe/Brussels",
+  "modelChain": true,
+  "modelHeaders": true,
+  "daySlider": {"enabled": true, "days": "all"},
+  "favorites": {
+    "enabled": true,
+    "presets": []
+  },
+  "map": "opentopomap",
+  "languages": ["de", "en", "fr", "it", "sl", "cs", "nl", "da"],
+  "defaultLanguage": "en",
+  "legal": {
+    "hosting": "all-inkl",
+    "imprint": {
+      "name": "Bastian Schnitzler",
+      "email": "baschni@gmx.de",
+      "address": [
+        "Cornelius-Fredericks-Straße 56a",
+        "13351 Berlin"
+      ]
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "types": [],
+    "allowImportingTsExtensions": true,
+    // Typprüfung gegen die Quellen des Kerns, ohne vorherigen Build.
+    "paths": {
+      "@graupel/meteogram": ["../meteogram/src/index.ts"]
+    }
+  },
+  "include": [
+    "src",
+    "test",
+    "tsup.config.ts",
+    "vitest.config.ts"
+  ]
+}

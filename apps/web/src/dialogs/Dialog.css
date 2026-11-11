@@ -1,0 +1,150 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Modal popup (REQ-434): centred box, full width on phones, scrolls inside when the content is long. Its margin keeps
+ * clear of a phone's camera in landscape (REQ-618).
+ */
+.dialog {
+  width: min(40rem, calc(100vw - 2 * (var(--space-4) + var(--safe-area-x))));
+  max-width: none;
+  max-height: calc(100dvh - 2 * var(--space-4));
+  padding: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.25);
+}
+
+.dialog[open] {
+  display: flex;
+}
+
+/*
+ * The page behind an open dialog does not scroll (REQ-730, state/scrollLock.ts), not even when a swipe over the dialog
+ * or its edge runs on past the end of what scrolls inside; the dialog's own scrolling stops at its ends. Where the page
+ * showed a scroll bar its room is kept, so the page behind does not move sideways.
+ */
+html.dialog-open,
+html.dialog-open body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.dialog-open--gutter {
+  scrollbar-gutter: stable;
+}
+
+.dialog,
+.dialog__body {
+  overscroll-behavior: contain;
+}
+
+/*
+ * A dialog as tall as the settings (REQ-686): the same height for every content, a longer one scrolls in the body; on
+ * a narrow screen as tall as the screen allows. On a phone the model info is just as big (REQ-719).
+ */
+.dialog--tall {
+  height: min(44rem, calc(100dvh - 2 * var(--space-4)));
+}
+
+.dialog--tall > .dialog__box > .dialog__body {
+  flex: 1 1 auto;
+}
+
+.dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+.dialog__box {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+}
+
+.dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dialog__title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+/* Icon buttons in the heading row, right-aligned before the close button (REQ-469). */
+.dialog__header-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.dialog__body {
+  min-height: 0;
+  padding: var(--space-4);
+  overflow: auto;
+}
+
+/* Without the heading row (REQ-460): content beside a narrow column with the close button and further tools. */
+.dialog__box--bare {
+  flex-direction: row;
+}
+
+.dialog__box--bare > .dialog__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dialog__tools {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+}
+
+/* Square button with an icon only; the accessible name comes from aria-label. */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .icon-button:hover {
+    background: var(--color-surface-muted);
+  }
+}
+
+@media (max-width: 30rem) {
+  .dialog {
+    width: calc(100vw - 2 * var(--space-2));
+    max-height: calc(100dvh - 2 * var(--space-2));
+  }
+
+  .dialog__body {
+    padding: var(--space-3);
+  }
+
+  .dialog--tall {
+    height: calc(100dvh - 2 * var(--space-2));
+  }
+}

@@ -1,0 +1,8 @@
+# Lizenzangaben für Dateien ohne eigenen SPDX-Header (REUSE-Spezifikation 3.3).
+# Alle anderen Dateien in generator/ tragen den Header selbst.
+version = 1
+
+[[annotations]]
+path = ["README.md", "THIRD_PARTY_LICENSES.md", "uv.lock"]
+SPDX-FileCopyrightText = "2026 Bastian Schnitzler"
+SPDX-License-Identifier = "MPL-2.0"

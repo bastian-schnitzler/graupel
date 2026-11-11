@@ -1,0 +1,24 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Info popup (REQ-525): one fixed height for all tabs, so the popup keeps its size and top edge when the tab changes;
+ * a longer tab scrolls inside the body. The tab bar itself is styled in Tabs.css.
+ */
+.info-dialog {
+  height: min(44rem, calc(100dvh - 2 * var(--space-4)));
+}
+
+.info-dialog .dialog__body {
+  flex: 1 1 auto;
+}
+
+/* The tab bar at the top of the body, on the heading row's divider. */
+.info-dialog .tabs {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+}
+
+@media (max-width: 30rem) {
+  .info-dialog {
+    height: calc(100dvh - 2 * var(--space-2));
+  }
+}

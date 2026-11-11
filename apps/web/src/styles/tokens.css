@@ -1,0 +1,127 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Design tokens. Light is the default; dark applies when the system prefers it, unless the page is
+ * forced to light with data-theme="light" on <html>. data-theme="dark" forces dark.
+ */
+:root {
+  color-scheme: light;
+
+  --color-bg: #f4f6f8;
+  --color-surface: #ffffff;
+  --color-surface-muted: #eef1f4;
+  --color-text: #1b2430;
+  --color-text-muted: #5a6675;
+  --color-border: #d5dbe2;
+  --color-accent: #1f6fb2;
+  --color-accent-contrast: #ffffff;
+  --color-focus: #1f6fb2;
+  /* Today: the day slider's bar and badge, and on phones today's labels (REQ-559). */
+  --color-today: #f0a845;
+
+  --font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.25rem;
+  --line-height: 1.5;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.06);
+
+  --page-max-width: 80rem;
+  --page-gutter: var(--space-4);
+  /*
+   * The wider of the screen's side insets (REQ-618): a phone's camera in landscape, since the page reaches the screen's
+   * edges. Centred popups keep it on both sides; 0 on desktops, tablets and phones in portrait.
+   */
+  --safe-area-x: max(env(safe-area-inset-left), env(safe-area-inset-right));
+
+  /*
+   * Meteogram tooltip (REQ-451): the card colours of the page, value colours dark enough for a light box. Gusts take
+   * the wind colour and the apparent temperature the temperature colour, like their curves (REQ-442).
+   */
+  --graupel-tooltip-background: var(--color-surface);
+  --graupel-tooltip-border: var(--color-border);
+  --graupel-tooltip-divider: var(--color-border);
+  --graupel-tooltip-text: var(--color-text);
+  --graupel-tooltip-label: var(--color-text-muted);
+  --graupel-tooltip-temperature: #e11d48;
+  --graupel-tooltip-apparent-temperature: #e11d48;
+  --graupel-tooltip-wind: #0369a1;
+  --graupel-tooltip-gust: #0369a1;
+  --graupel-tooltip-precipitation: #1d4ed8;
+  --graupel-tooltip-probability: #0e7490;
+  --tooltip-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.18);
+}
+
+/*
+ * Phone in portrait (REQ-692, the phone query of state/phoneLandscape.ts): the side margin of the page (place row, day
+ * slider, legend, footer and the chart's source line) is a fixed share of the screen's width instead of fixed pixels.
+ * A phone that shows the page narrower (e.g. Chrome on Android with page zoom) keeps the same proportion, so the margin
+ * does not look larger there. It is a third smaller than the 16 px of a 390 px iPhone it was (REQ-722): two thirds of
+ * that, about 10.7 px there. The meteogram still reaches from edge to edge.
+ */
+@media (pointer: coarse) and (max-width: 30rem) {
+  :root {
+    --page-gutter: calc(100vw * 16 / 390 * 2 / 3);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --color-bg: #11161c;
+    --color-surface: #1a2129;
+    --color-surface-muted: #222b35;
+    --color-text: #e4e9ef;
+    --color-text-muted: #9aa6b4;
+    --color-border: #2f3a46;
+    --color-accent: #6cb2ec;
+    --color-accent-contrast: #0b1118;
+    --color-focus: #6cb2ec;
+  --color-today: #d08f2c;
+    --color-today: #d08f2c;
+    --shadow-surface: none;
+
+    /* Meteogram tooltip: the meteogram's own value colours, made for a dark box. */
+    --graupel-tooltip-temperature: #f43f5e;
+    --graupel-tooltip-apparent-temperature: #f43f5e;
+    --graupel-tooltip-wind: #0ea5e9;
+    --graupel-tooltip-gust: #0ea5e9;
+    --graupel-tooltip-precipitation: #3b82f6;
+    --graupel-tooltip-probability: #38bdf8;
+    --tooltip-shadow: 0 0.625rem 1.5625rem rgb(0 0 0 / 0.6);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-bg: #11161c;
+  --color-surface: #1a2129;
+  --color-surface-muted: #222b35;
+  --color-text: #e4e9ef;
+  --color-text-muted: #9aa6b4;
+  --color-border: #2f3a46;
+  --color-accent: #6cb2ec;
+  --color-accent-contrast: #0b1118;
+  --color-focus: #6cb2ec;
+  --shadow-surface: none;
+
+  /* Meteogram tooltip: the meteogram's own value colours, made for a dark box. */
+  --graupel-tooltip-temperature: #f43f5e;
+  --graupel-tooltip-apparent-temperature: #f43f5e;
+  --graupel-tooltip-wind: #0ea5e9;
+  --graupel-tooltip-gust: #0ea5e9;
+  --graupel-tooltip-precipitation: #3b82f6;
+  --graupel-tooltip-probability: #38bdf8;
+  --tooltip-shadow: 0 0.625rem 1.5625rem rgb(0 0 0 / 0.6);
+}

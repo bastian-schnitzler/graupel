@@ -1,0 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Bastian Schnitzler
+# SPDX-License-Identifier: MPL-2.0
+
+# Open-Meteo OpenAPI, nur geladen (Cache), nie einchecken
+forecast.yml

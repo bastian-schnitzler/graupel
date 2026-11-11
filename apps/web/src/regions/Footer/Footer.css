@@ -1,0 +1,155 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Footer (REQ-426, REQ-449): a row of links to the info popup, right-aligned on the page background, without a card
+ * and without underlines, so it stays in the background. On a phone the meteogram's copy and save buttons stand at the
+ * start of the same row, left-aligned (REQ-541); the links stay right. Since REQ-550 the phone's row is the other way
+ * round: the links left, the buttons right; since REQ-552 the links take the chart's smallest font size; since REQ-582
+ * the phone's row has no links, only the buttons.
+ */
+.region.footer {
+  padding: var(--space-1) 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  font-size: var(--font-size-sm);
+}
+
+.footer__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+/* Empty (and without size) except on a phone with a forecast. */
+.footer__start {
+  display: flex;
+  align-items: center;
+}
+
+.footer__start:empty {
+  display: none;
+}
+
+.footer__nav {
+  margin-left: auto;
+}
+
+.footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.footer__link {
+  min-height: 2.5rem;
+  padding: var(--space-1) var(--space-2);
+  font: inherit;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .footer__link:hover {
+    color: var(--color-text);
+  }
+}
+
+/*
+ * Phone (REQ-577): a third of the space between the chart's source line and the row's content, about 10 instead of 31 px.
+ * The footer takes back the page's gap above it and its own padding. Since REQ-729 the source line stands in the row
+ * itself, beside the buttons: the row starts right below the chart, and the icons of its buttons, which keep their
+ * 2.5rem touch height, stand about 10 px below the chart, the source's text in the middle of the row with them. The row
+ * no longer reaches up over the chart, so a swipe at the chart's lower edge still scrolls it. Positioned, so the touch
+ * room of Safari's buttons (REQ-617, below) lies over the chart.
+ */
+.region.footer--phone {
+  position: relative;
+  margin-top: calc(-1 * var(--app-gap, var(--space-3)));
+  padding-top: 0;
+}
+
+/*
+ * Phone (REQ-550, REQ-582): only the copy and save buttons, at the end of the row; info, imprint and privacy are in
+ * the menu at the end of the place row (REQ-580).
+ */
+.footer__row--phone {
+  justify-content: flex-end;
+}
+
+/*
+ * Phone and tablet (REQ-729): the slot takes the whole row, with the data source and the buttons in one line; on a
+ * tablet the source left and the buttons right, on a phone the buttons left and the source right-aligned.
+ */
+.footer__row--phone .footer__start {
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: var(--space-2);
+}
+
+/* On a phone nothing below the footer row (REQ-561); in Safari on the iPhone room for its bar (REQ-581, below). */
+@container app (max-width: 40rem) {
+  .region.footer {
+    padding-bottom: 0;
+  }
+}
+
+/* Tablet (REQ-728, REQ-742): the same rules by the class, without style queries. */
+:where(.app--tablet) .region.footer {
+  padding-bottom: 0;
+}
+
+/*
+ * Safari on the iPhone (REQ-581): it lays its bottom bar over the page and shows it at the page's end, where a tap on
+ * copy or save would open the bar instead. Below the row stays as much room as the bar covers (about 75 px on iOS 26),
+ * so at the page's end the row stands above it. Other browsers and the installed app end with the row (REQ-561,
+ * REQ-611).
+ */
+.region.footer--safari {
+  padding-bottom: 5rem;
+}
+
+/*
+ * Where the page fits on the screen in portrait (the meteogram takes the height left, REQ-608), nothing scrolls, so
+ * Safari keeps its bar shown and the bar covers nothing: no room below the row, it stands right above the bar (REQ-614).
+ */
+.app__inner:has(.meteogram__scroll--fits) .region.footer--safari {
+  padding-bottom: 0;
+}
+
+/*
+ * Safari on the iPhone (REQ-617): the copy and save icons stand at the lower edge of their buttons, 10 px closer to
+ * Safari's bottom bar; where the page fits, the chart takes the 10 px. The buttons keep their 2.5rem touch height: it
+ * reaches 10 px up beside the source line. Safari's own room above its floating bar stays (DEC-054). Always in Safari,
+ * not only where the page fits, so the page's height does not depend on whether it fits.
+ */
+.region.footer--safari .meteogram-actions__button {
+  position: relative;
+  height: 1.875rem;
+  align-items: flex-end;
+}
+
+.region.footer--safari .meteogram-actions__button::before {
+  position: absolute;
+  inset: -0.625rem -1px -1px;
+  content: "";
+}
+
+/*
+ * Safari on the iPhone (REQ-617, REQ-729): the source's text in the row's line stands as low as the icons, its middle on
+ * theirs (20 px icons, 1 px above the button's lower edge; a 14 px line).
+ */
+.region.footer--safari .footer__start .meteogram__source {
+  align-self: flex-end;
+  padding-bottom: 4px;
+}

@@ -1,0 +1,155 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Settings popup (REQ-686): one fixed height for all tabs (`dialog--tall`, Dialog.css), so the popup keeps its size and
+ * top edge when the tab changes; a longer tab scrolls inside the body, below the tab bar.
+ */
+
+/* The tab bar sits on the heading row's divider: no second line between them. */
+.settings-dialog .dialog__header {
+  border-bottom: 0;
+}
+
+/*
+ * Tab bar below the heading row (REQ-686), outside the scrolling body. All tabs stay in one row; when they do not fit
+ * (a phone, long labels) the bar scrolls sideways without a visible scrollbar, and the selected tab is scrolled into
+ * view. The underline sits inside the bar, so it never adds a vertical scrollbar.
+ */
+.settings-tabs {
+  flex: none;
+  flex-wrap: nowrap;
+  padding: 0 var(--space-2);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.settings-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-tabs .tabs__tab {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* The sections of a tab stacked, separated by a line. */
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.settings__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.settings__title {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: 600;
+}
+
+.settings__note {
+  margin: var(--space-4) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.settings__text {
+  margin: 0;
+}
+
+/* Choice between a few options (colour mode): in one row, wrapped on narrow screens. */
+.settings__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.settings__choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.5rem;
+  cursor: pointer;
+}
+
+.settings__choice input {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  accent-color: var(--color-accent);
+}
+
+/* Messages of export and import above the sections. Live regions stay in the page while empty; only filled ones
+   take space. */
+.settings__status {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.settings__status:empty {
+  margin: 0;
+}
+
+/* Several switches of one section (meteogram), stacked. */
+.settings__group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+/* A labelled select below a switch (days shown). */
+.settings__field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.5rem;
+}
+
+/* Greyed out while the day slider is on; it keeps its place so the popup keeps its height (REQ-500). */
+.settings__field[aria-disabled="true"] {
+  opacity: 0.5;
+}
+
+.settings__select:disabled {
+  cursor: not-allowed;
+}
+
+/* Short explanation below a choice (dew point Auto, REQ-593). */
+.settings__hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.settings__select {
+  max-width: 100%;
+  min-height: 2.5rem;
+  padding: var(--space-1) var(--space-2);
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+/* The start place select keeps its own width (at most the popup). */
+.settings__section > .settings__select {
+  align-self: flex-start;
+}
+
+@media (max-width: 30rem) {
+  .settings-tabs {
+    gap: 0;
+    padding: 0;
+  }
+}

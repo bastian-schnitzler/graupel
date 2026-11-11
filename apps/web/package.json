@@ -1,0 +1,39 @@
+{
+  "name": "@graupel/web",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Graupel-Website und App",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "package": "node scripts/fresh-build.mjs && node scripts/package-site.mjs",
+    "licenses": "node scripts/third-party.mjs",
+    "test": "vitest run",
+    "lint": "eslint src test e2e scripts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@graupel/download": "workspace:*",
+    "@graupel/meteogram": "workspace:*",
+    "@graupel/meteogram-react": "workspace:*",
+    "@graupel/model-data": "workspace:*",
+    "@maptoolkit/maplibre-gl-logo": "0.1.0",
+    "leaflet": "1.9.4",
+    "maplibre-gl": "5.24.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/leaflet": "1.9.22",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "jsdom": "^30.0.1",
+    "vite": "^8.2.2"
+  }
+}

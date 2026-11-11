@@ -1,0 +1,30 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Imprint in the info popup (REQ-430). */
+.imprint {
+  overflow-wrap: anywhere;
+}
+
+.imprint p {
+  margin: 0 0 var(--space-2);
+}
+
+.imprint__section {
+  margin-top: var(--space-4);
+}
+
+.imprint__heading {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-md);
+}
+
+.imprint__address {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  font-style: normal;
+}
+
+.imprint__address a {
+  color: var(--color-accent);
+}

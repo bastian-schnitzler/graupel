@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+    "allowImportingTsExtensions": true
+  },
+  // viewer.js works on the Leaflet global without type definitions; lib.js and schema.js carry the logic.
+  "include": ["src/lib.js", "src/schema.js", "test", "vitest.config.ts"]
+}

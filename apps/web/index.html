@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: 2026 Bastian Schnitzler -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Bis an Kamera und Rand (REQ-618): die Seite hält sich selbst frei davon (safe-area, AppLayout.css). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- Kennung bei Maptoolkit (REQ-698): Origin und Referer tragen nur die Domain der Seite (graupel.eu, …), nie Pfad
+         oder Ort. maptoolkitStyle.ts setzt dieselbe Policy für jede Kartenanfrage. -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <!-- Graupel-Wolke (REQ-424) auf hellblauem Grund (REQ-516); erzeugt mit scripts/generate-icons.mjs. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <!-- Installierbar als App (REQ-425); die Symbole unter icons/ liefert das Logo (REQ-424). Auf Android im Vollbild
+         ohne Status- und Navigationsleiste, sonst standalone (REQ-755, display im Manifest, state/appMode.ts). -->
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <!-- Leisten von Browser und App (Statusleiste, Fläche über der heruntergezogenen Seite) in der Hintergrundfarbe
+         der Seite (REQ-750, --color-bg in tokens.css, PAGE_BACKGROUND in src/state/colorMode.ts). "default": die
+         Statusleiste der installierten App auf iPhone und iPad nimmt theme-color an, die Seite beginnt darunter. -->
+    <meta name="theme-color" content="#f4f6f8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#11161c" media="(prefers-color-scheme: dark)" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- Farbmodus (REQ-426) samt theme-color vor dem ersten Zeichnen setzen; src/state/colorMode.ts hält ihn danach
+         aktuell. -->
+    <script>
+      try {
+        var mode = localStorage.getItem("graupel.colorMode");
+        if (mode === "light" || mode === "dark") {
+          document.documentElement.dataset.theme = mode;
+          var metas = document.querySelectorAll('meta[name="theme-color"]');
+          var color = document.querySelector('meta[name="theme-color"][media*="' + mode + '"]').content;
+          for (var i = 0; i < metas.length; i++) metas[i].content = color;
+        }
+      } catch (error) {}
+    </script>
+    <title>Graupel</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

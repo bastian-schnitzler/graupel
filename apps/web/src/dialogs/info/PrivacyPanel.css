@@ -1,0 +1,45 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Privacy policy in the info popup (REQ-432). */
+.privacy {
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+.privacy p {
+  margin: 0 0 var(--space-2);
+}
+
+.privacy__updated {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.privacy__section {
+  margin-top: var(--space-4);
+}
+
+.privacy__heading {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-md);
+}
+
+.privacy__address {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 var(--space-2);
+  font-style: normal;
+}
+
+.privacy__provider {
+  margin-bottom: var(--space-2);
+}
+
+.privacy__links {
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+.privacy__links a {
+  color: var(--color-accent);
+}

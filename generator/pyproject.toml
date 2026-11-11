@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 Bastian Schnitzler
+# SPDX-License-Identifier: MPL-2.0
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "graupel-gen"
+version = "0.5.0"
+description = "Generator der Graupel-Modelldaten: Modellkatalog, Modellgebiete, Regionen und Chain-Zonen aus Open-Meteo"
+readme = "README.md"
+license = "MPL-2.0"
+license-files = ["LICENSE", "THIRD_PARTY_LICENSES.md"]
+requires-python = ">=3.10"
+dependencies = [
+    "httpx>=0.28.1",
+    "pyproj>=3.7.1",
+    "pyyaml>=6.0.3",
+    "shapely>=2.1.2",
+]
+
+[project.scripts]
+graupel-gen = "graupel_gen.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.black]
+line-length = 79

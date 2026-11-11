@@ -1,0 +1,486 @@
+{
+  "meta": {
+    "license": "MPL-2.0",
+    "license_url": "https://mozilla.org/MPL/2.0/",
+    "generated_by": "graupel-gen 0.5.0 regions",
+    "generated_at": "2026-11-11T20:15:53Z",
+    "sources": [
+      {
+        "name": "Natural Earth 10m Admin 0 Countries",
+        "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_admin_0_countries.geojson",
+        "version": "v5.1.2",
+        "sha256": "239eec57ac17f100a11e2536cffc56752c318b50ae765b0918ff7aab4ce8f255"
+      },
+      {
+        "name": "generator/sources/regions.yaml"
+      },
+      {
+        "name": "generator/sources/resolver_points.yaml"
+      },
+      {
+        "name": "model_catalogue.json",
+        "version": "2026-11-11T19:36:24Z"
+      },
+      {
+        "name": "model_domains.json",
+        "version": "2026-11-11T19:36:58Z"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "Zugspitze",
+      "lat": 47.421,
+      "lon": 10.985,
+      "region_id": "northern_alps",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Watzmann",
+      "lat": 47.554,
+      "lon": 12.923,
+      "region_id": "eastern_alps",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "geosphere_claef_austria",
+        "icon_eu",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Berchtesgaden",
+      "lat": 47.631,
+      "lon": 13.002,
+      "region_id": "eastern_alps",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "geosphere_claef_austria",
+        "icon_eu",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Garmisch-Partenkirchen",
+      "lat": 47.492,
+      "lon": 11.096,
+      "region_id": "northern_alps",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Ortler",
+      "lat": 46.508,
+      "lon": 10.542,
+      "region_id": "dolomites",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "italia_meteo_arpae_icon_2i",
+        "icon_eu",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Matterhorn",
+      "lat": 45.9765,
+      "lon": 7.6586,
+      "region_id": "western_alps_ch",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "meteoswiss_icon_ch1",
+        "meteoswiss_icon_ch2",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Mont Blanc",
+      "lat": 45.8326,
+      "lon": 6.8652,
+      "region_id": "western_alps_fr",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "meteofrance_arome_france_hd",
+        "meteoswiss_icon_ch2",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "meteofrance_arome_france",
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Courmayeur",
+      "lat": 45.79,
+      "lon": 6.97,
+      "region_id": "western_alps_fr",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "meteofrance_arome_france_hd",
+        "meteoswiss_icon_ch2",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "meteofrance_arome_france",
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "München",
+      "lat": 48.137,
+      "lon": 11.576,
+      "region_id": "germany",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Wien",
+      "lat": 48.208,
+      "lon": 16.373,
+      "region_id": "austria",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "geosphere_claef_austria",
+        "icon_eu",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Sölden",
+      "lat": 46.9655,
+      "lon": 11.0076,
+      "region_id": "austria",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "geosphere_claef_austria",
+        "icon_eu",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Innsbruck",
+      "lat": 47.2692,
+      "lon": 11.4041,
+      "region_id": "austria",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "geosphere_claef_austria",
+        "icon_eu",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Großglockner",
+      "lat": 47.0742,
+      "lon": 12.6947,
+      "region_id": "austria",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "geosphere_claef_austria",
+        "icon_eu",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Paris",
+      "lat": 48.857,
+      "lon": 2.352,
+      "region_id": "france",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "meteofrance_arome_france_hd",
+        "meteofrance_arpege_europe",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "meteofrance_arome_france",
+        "meteofrance_arpege_europe",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "New York",
+      "lat": 40.713,
+      "lon": -74.006,
+      "region_id": "usa",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "ncep_rrfs_conus",
+        "ncep_nbm_conus",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "ncep_rrfs_conus",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Chicago",
+      "lat": 41.878,
+      "lon": -87.63,
+      "region_id": "usa",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "ncep_rrfs_conus",
+        "ncep_nbm_conus",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "ncep_rrfs_conus",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Denver",
+      "lat": 39.739,
+      "lon": -104.99,
+      "region_id": "usa",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "ncep_rrfs_conus",
+        "ncep_nbm_conus",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "ncep_rrfs_conus",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Miami",
+      "lat": 25.762,
+      "lon": -80.192,
+      "region_id": "usa",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "ncep_rrfs_conus",
+        "ncep_nbm_conus",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "ncep_rrfs_conus",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Tromsø",
+      "lat": 69.65,
+      "lon": 18.96,
+      "region_id": "nordic",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "metno_nordic",
+        "icon_eu",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Kehl",
+      "lat": 48.57,
+      "lon": 7.81,
+      "region_id": "germany",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "icon_d2",
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Straßburg",
+      "lat": 48.58,
+      "lon": 7.75,
+      "region_id": "france",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "meteofrance_arome_france_hd",
+        "meteofrance_arpege_europe",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "meteofrance_arome_france",
+        "meteofrance_arpege_europe",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Anchorage",
+      "lat": 61.22,
+      "lon": -149.9,
+      "region_id": "usa",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "cmc_gem_rdps",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "cmc_gem_rdps",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Taipeh",
+      "lat": 25.03,
+      "lon": 121.56,
+      "region_id": null,
+      "resolution_reason": "domain_fallback",
+      "main_chain_ids": [
+        "jma_msm",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "jma_msm",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Mittelatlantik",
+      "lat": 40.0,
+      "lon": -35.0,
+      "region_id": null,
+      "resolution_reason": "global_fallback",
+      "main_chain_ids": [
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Longyearbyen",
+      "lat": 78.22,
+      "lon": 15.65,
+      "region_id": "nordic",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "cmc_gem_rdps",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "cmc_gem_rdps",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Pjöngjang",
+      "lat": 39.03,
+      "lon": 125.75,
+      "region_id": "korea",
+      "resolution_reason": "region",
+      "main_chain_ids": [
+        "jma_msm",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "jma_msm",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Tunis",
+      "lat": 36.8,
+      "lon": 10.18,
+      "region_id": null,
+      "resolution_reason": "domain_fallback",
+      "main_chain_ids": [
+        "italia_meteo_arpae_icon_2i",
+        "icon_eu",
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "icon_eu",
+        "ecmwf_ifs025"
+      ]
+    },
+    {
+      "name": "Golf von Guinea",
+      "lat": 0.0,
+      "lon": 0.0,
+      "region_id": null,
+      "resolution_reason": "global_fallback",
+      "main_chain_ids": [
+        "ecmwf_ifs"
+      ],
+      "cloud_chain_ids": [
+        "ecmwf_ifs025"
+      ]
+    }
+  ]
+}

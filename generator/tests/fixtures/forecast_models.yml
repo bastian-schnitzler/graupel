@@ -1,0 +1,74 @@
+# SPDX-FileCopyrightText: 2026 Bastian Schnitzler
+# SPDX-FileCopyrightText: Open-Meteo.com
+# SPDX-License-Identifier: CC-BY-4.0
+#
+# Contains data derived from Open-Meteo.com (CC BY 4.0, https://open-meteo.com/).
+# Modified: only the model IDs of the catalogue, in the structure of the OpenAPI
+# forecast.yml.
+
+# Minimale Eingabe der Offline-Tests im Aufbau der Open-Meteo-OpenAPI forecast.yml:
+# nur der Enum "models" mit den Modell-IDs des Katalogs (Stand der übernommenen
+# Daten). Die echte forecast.yml wird nur geladen, nie eingecheckt.
+openapi: 3.0.0
+paths:
+  /v1/forecast:
+    get:
+      parameters:
+        - name: models
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - best_match
+                - ecmwf_ifs
+                - ecmwf_ifs025
+                - ecmwf_aifs025_single
+                - cma_grapes_global
+                - bom_access_global
+                - ncep_gfs_seamless
+                - ncep_gfs_global
+                - ncep_hrrr_conus
+                - ncep_nbm_conus
+                - ncep_nam_conus
+                - ncep_gfs_graphcast025
+                - ncep_aigfs025
+                - ncep_hgefs025_ensemble_mean
+                - jma_seamless
+                - jma_msm
+                - jma_gsm
+                - kma_seamless
+                - kma_ldps
+                - kma_gdps
+                - icon_seamless
+                - icon_global
+                - icon_eu
+                - icon_d2
+                - cmc_gem_seamless
+                - cmc_gem_gdps
+                - cmc_gem_rdps
+                - cmc_gem_hrdps
+                - cmc_gem_hrdps_west
+                - meteofrance_seamless
+                - meteofrance_arpege_world
+                - meteofrance_arpege_europe
+                - meteofrance_arome_france
+                - meteofrance_arome_france_hd
+                - italia_meteo_arpae_icon_2i
+                - metno_seamless
+                - metno_nordic
+                - knmi_seamless
+                - knmi_harmonie_arome_europe
+                - knmi_harmonie_arome_netherlands
+                - dmi_seamless
+                - dmi_harmonie_arome_europe
+                - ukmo_seamless
+                - ukmo_global_deterministic_10km
+                - ukmo_uk_deterministic_2km
+                - meteoswiss_icon_seamless
+                - meteoswiss_icon_ch1
+                - meteoswiss_icon_ch2
+                - geosphere_seamless
+                - geosphere_arome_austria
+                - geosphere_claef_austria

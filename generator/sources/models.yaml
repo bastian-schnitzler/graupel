@@ -1,0 +1,481 @@
+# SPDX-FileCopyrightText: 2026 Bastian Schnitzler
+# SPDX-License-Identifier: MPL-2.0
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# Kuratierte Modell-Metadaten für den Katalog (graupel-gen catalog).
+#
+# Je Modell-ID:
+#   name, provider, region, spatial_resolution_km, active
+#                       kuratierte Katalogfelder; sie gehen den Werten des
+#                       bestehenden Katalogs vor. Fehlt ein Modell hier, bleiben
+#                       die Werte des Katalogs; ein neues Modell bekommt sie aus
+#                       den Labels der Open-Meteo-Website und dem Namen.
+#   meta_path           Pfad unter /data/{path}/static/meta.json, wenn er von
+#                       der Modell-ID abweicht (Katalogfeld meta_path).
+#                       Seamless-Blends und best_match haben keinen.
+#   ensemble_meta_path  Ensemble hinter precipitation_probability
+#                       (Katalogfeld ensemble_meta_path).
+#   probe_point         [lat, lon] für die Katalog-Probe, innerhalb des
+#                       Modellgebiets; ohne Angabe [50.0, 8.0].
+#   documentation_url   Beschreibung des Modells beim Veröffentlicher (stabile
+#                       Übersichtsseite), ersatzweise die Seite des Anbieters in
+#                       der Open-Meteo-Dokumentation; Seamless-Blends und
+#                       best_match zeigen auf die Open-Meteo-Dokumentation
+#                       (Katalogfeld documentation_url, REQ-688). Geht dem
+#                       bestehenden Katalog vor; ein neues Modell ohne Eintrag
+#                       bekommt null.
+#
+# provider_prefixes: Anbieter neuer Modelle nach dem Präfix der ID.
+# provider_urls: Haupt-Homepage je Anbieter (Katalogfeld provider_url). Jeder
+#                     Anbieter in models und provider_prefixes braucht eine.
+# excluded_models: Modelle der Open-Meteo-Enum, die nicht in den Katalog
+#                     kommen (DEC-033: keine neuen Läufe mehr bei Open-Meteo).
+# extra_models: Modelle, die die Forecast-API liefert, obwohl forecast.yml sie
+#                     nicht nennt; sie zählen wie Modelle der Enum.
+#
+# Alle URLs müssen https mit Host sein; der Generator prüft nur die Form und
+# ruft sie nicht ab (offline, DEC-030).
+
+excluded_models:
+  - bom_access_global
+  - ncep_gfs_graphcast025
+  - kma_seamless
+  - kma_ldps
+  - kma_gdps
+
+# RRFS fehlt im OpenAPI-forecast.yml, die Forecast-API liefert es (REQ-768).
+extra_models:
+  - ncep_rrfs_conus
+
+provider_prefixes:
+  ecmwf_: "ECMWF"
+  icon_: "DWD"
+  dwd_: "DWD"
+  ncep_: "NOAA"
+  gfs_: "NOAA"
+  cmc_gem_: "GEM"
+  gem_: "GEM"
+  meteofrance_: "Météo-France"
+  ukmo_: "UK Met Office"
+  jma_: "JMA"
+  kma_: "KMA"
+  cma_: "CMA"
+  bom_: "BOM"
+  metno_: "MET Norway"
+  knmi_: "KNMI"
+  dmi_: "DMI"
+  meteoswiss_: "MeteoSwiss"
+  geosphere_: "GeoSphere Austria"
+  italia_meteo_: "ItaliaMeteo / ARPAE"
+  chmi_: "CHMI"
+
+provider_urls:
+  "Open-Meteo": "https://open-meteo.com"
+  "ECMWF": "https://www.ecmwf.int"
+  "DWD": "https://www.dwd.de"
+  "NOAA": "https://www.noaa.gov"
+  "GEM": "https://www.canada.ca/en/environment-climate-change.html"
+  "Météo-France": "https://meteofrance.fr"
+  "UK Met Office": "https://www.metoffice.gov.uk"
+  "JMA": "https://www.jma.go.jp"
+  "KMA": "https://www.kma.go.kr"
+  "CMA": "https://www.cma.gov.cn"
+  "BOM": "https://www.bom.gov.au"
+  "MET Norway": "https://www.met.no"
+  "KNMI": "https://www.knmi.nl"
+  "DMI": "https://www.dmi.dk"
+  "MeteoSwiss": "https://www.meteoswiss.admin.ch"
+  "GeoSphere Austria": "https://www.geosphere.at"
+  "ItaliaMeteo / ARPAE": "https://www.arpae.it"
+  "CHMI": "https://www.chmi.cz"
+
+models:
+  best_match:
+    name: "Best match"
+    documentation_url: "https://open-meteo.com/en/docs"
+    provider: "Open-Meteo"
+    region: "Global"
+    spatial_resolution_km: 2.2
+    active: true
+  ecmwf_ifs:
+    name: "ECMWF IFS HRES 9km"
+    documentation_url: "https://www.ecmwf.int/en/forecasts/documentation-and-support"
+    provider: "ECMWF"
+    region: "Global"
+    spatial_resolution_km: 9.0
+    active: true
+    ensemble_meta_path: ecmwf_ifs025_ensemble
+  ecmwf_ifs025:
+    name: "ECMWF IFS 0.25°"
+    documentation_url: "https://www.ecmwf.int/en/forecasts/documentation-and-support"
+    provider: "ECMWF"
+    region: "Global"
+    spatial_resolution_km: 25.0
+    active: true
+    ensemble_meta_path: ecmwf_ifs025_ensemble
+  ecmwf_aifs025_single:
+    name: "ECMWF AIFS 0.25° Single"
+    documentation_url: "https://open-meteo.com/en/docs/ecmwf-api"
+    provider: "ECMWF"
+    region: "Global"
+    spatial_resolution_km: 25.0
+    active: true
+  cma_grapes_global:
+    name: "CMA GRAPES Global"
+    documentation_url: "https://open-meteo.com/en/docs/cma-api"
+    provider: "CMA"
+    region: "Global"
+    spatial_resolution_km: 25.0
+    active: true
+    probe_point: [39.9, 116.4]
+  ncep_gfs_seamless:
+    name: "GFS Seamless"
+    documentation_url: "https://open-meteo.com/en/docs/gfs-api"
+    provider: "NOAA"
+    region: "Global"
+    spatial_resolution_km: 13.0
+    active: true
+  ncep_gfs_global:
+    name: "GFS Global 0.11°/0.25°"
+    documentation_url: "https://www.emc.ncep.noaa.gov/emc/pages/numerical_forecast_systems/gfs.php"
+    provider: "NOAA"
+    region: "Global"
+    spatial_resolution_km: 11.0
+    active: true
+    meta_path: ncep_gfs013
+    ensemble_meta_path: ncep_gefs05
+  # Open-Meteo stellt HRRR am 2026-11-30 ein; Nachfolger ist RRFS (REQ-768).
+  # Im Katalog, aber in keiner Kette.
+  ncep_hrrr_conus:
+    name: "HRRR Conus"
+    documentation_url: "https://rapidrefresh.noaa.gov/hrrr/"
+    provider: "NOAA"
+    region: "North America"
+    spatial_resolution_km: 3.0
+    active: false
+    probe_point: [40.7, -74.0]
+  ncep_rrfs_conus:
+    name: "NCEP RRFS Conus"
+    documentation_url: "https://open-meteo.com/en/docs/gfs-api"
+    provider: "NOAA"
+    region: "North America"
+    spatial_resolution_km: 3.0
+    active: true
+    probe_point: [40.7, -74.0]
+  ncep_nbm_conus:
+    name: "NBM Conus"
+    documentation_url: "https://vlab.noaa.gov/web/mdl/nbm"
+    provider: "NOAA"
+    region: "North America"
+    spatial_resolution_km: 2.5
+    active: true
+    probe_point: [40.7, -74.0]
+  ncep_nam_conus:
+    name: "NAM Conus"
+    documentation_url: "https://www.emc.ncep.noaa.gov/emc/pages/numerical_forecast_systems/nam.php"
+    provider: "NOAA"
+    region: "North America"
+    spatial_resolution_km: 12.0
+    active: true
+    probe_point: [40.7, -74.0]
+  ncep_aigfs025:
+    name: "AIGFS 0.25°"
+    documentation_url: "https://open-meteo.com/en/docs/gfs-api"
+    provider: "NOAA"
+    region: "Global"
+    spatial_resolution_km: 25.0
+    active: true
+  ncep_hgefs025_ensemble_mean:
+    name: "HGEFS 0.25° Ensemble Mean"
+    documentation_url: "https://open-meteo.com/en/docs/gfs-api"
+    provider: "NOAA"
+    region: "Global"
+    spatial_resolution_km: 25.0
+    active: true
+  jma_seamless:
+    name: "JMA Seamless"
+    documentation_url: "https://open-meteo.com/en/docs/jma-api"
+    provider: "JMA"
+    region: "Global / Japan"
+    spatial_resolution_km: 5.0
+    active: true
+    probe_point: [35.6, 139.7]
+  jma_msm:
+    name: "JMA MSM"
+    documentation_url: "https://www.jma.go.jp/jma/en/Activities/nwp.html"
+    provider: "JMA"
+    region: "Japan"
+    spatial_resolution_km: 5.0
+    active: true
+    probe_point: [35.6, 139.7]
+  jma_gsm:
+    name: "JMA GSM"
+    documentation_url: "https://www.jma.go.jp/jma/en/Activities/nwp.html"
+    provider: "JMA"
+    region: "Global"
+    spatial_resolution_km: 20.0
+    active: true
+    probe_point: [35.6, 139.7]
+  icon_seamless:
+    name: "ICON Seamless"
+    documentation_url: "https://open-meteo.com/en/docs/dwd-api"
+    provider: "DWD"
+    region: "Global / Regional"
+    spatial_resolution_km: 2.2
+    active: true
+  icon_global:
+    name: "ICON Global"
+    documentation_url: "https://www.dwd.de/EN/research/weatherforecasting/num_modelling/01_num_weather_prediction_modells/icon_description.html"
+    provider: "DWD"
+    region: "Global"
+    spatial_resolution_km: 13.0
+    active: true
+    meta_path: dwd_icon
+    ensemble_meta_path: dwd_icon_global_eps_native
+  icon_eu:
+    name: "ICON-EU"
+    documentation_url: "https://www.dwd.de/EN/research/weatherforecasting/num_modelling/01_num_weather_prediction_modells/icon_description.html"
+    provider: "DWD"
+    region: "Europe"
+    spatial_resolution_km: 7.0
+    active: true
+    meta_path: dwd_icon_eu
+    ensemble_meta_path: dwd_icon_eu_eps_native
+  icon_d2:
+    name: "ICON-D2"
+    documentation_url: "https://www.dwd.de/EN/research/weatherforecasting/num_modelling/01_num_weather_prediction_modells/icon_description.html"
+    provider: "DWD"
+    region: "Central Europe"
+    spatial_resolution_km: 2.2
+    active: true
+    meta_path: dwd_icon_d2
+    ensemble_meta_path: dwd_icon_d2_eps_native
+  cmc_gem_seamless:
+    name: "GEM Seamless"
+    documentation_url: "https://open-meteo.com/en/docs/gem-api"
+    provider: "GEM"
+    region: "Global / North America"
+    spatial_resolution_km: 2.5
+    active: true
+    probe_point: [45.5, -73.6]
+  cmc_gem_gdps:
+    name: "GEM Global"
+    documentation_url: "https://eccc-msc.github.io/open-data/msc-data/nwp_gdps/readme_gdps_en/"
+    provider: "GEM"
+    region: "Global"
+    spatial_resolution_km: 15.0
+    active: true
+    ensemble_meta_path: cmc_gem_geps
+    probe_point: [45.5, -73.6]
+  cmc_gem_rdps:
+    name: "GEM Regional"
+    documentation_url: "https://eccc-msc.github.io/open-data/msc-data/nwp_rdps/readme_rdps_en/"
+    provider: "GEM"
+    region: "North America"
+    spatial_resolution_km: 10.0
+    active: true
+    probe_point: [45.5, -73.6]
+  cmc_gem_hrdps:
+    name: "GEM HRDPS Continental"
+    documentation_url: "https://eccc-msc.github.io/open-data/msc-data/nwp_hrdps/readme_hrdps_en/"
+    provider: "GEM"
+    region: "Canada"
+    spatial_resolution_km: 2.5
+    active: true
+    probe_point: [45.5, -73.6]
+  cmc_gem_hrdps_west:
+    name: "GEM HRDPS West"
+    documentation_url: "https://open-meteo.com/en/docs/gem-api"
+    provider: "GEM"
+    region: "Western Canada"
+    spatial_resolution_km: 1.0
+    active: true
+    probe_point: [49.2, -123.1]
+  meteofrance_seamless:
+    name: "Météo-France Seamless"
+    documentation_url: "https://open-meteo.com/en/docs/meteofrance-api"
+    provider: "Météo-France"
+    region: "Global / France"
+    spatial_resolution_km: 1.3
+    active: true
+    probe_point: [48.8, 2.3]
+  meteofrance_arpege_world:
+    name: "ARPEGE World"
+    documentation_url: "https://open-meteo.com/en/docs/meteofrance-api"
+    provider: "Météo-France"
+    region: "Global"
+    spatial_resolution_km: 10.0
+    active: true
+    meta_path: meteofrance_arpege_world025
+    probe_point: [48.8, 2.3]
+  meteofrance_arpege_europe:
+    name: "ARPEGE Europe"
+    documentation_url: "https://open-meteo.com/en/docs/meteofrance-api"
+    provider: "Météo-France"
+    region: "Europe"
+    spatial_resolution_km: 7.5
+    active: true
+    probe_point: [48.8, 2.3]
+  meteofrance_arome_france:
+    name: "AROME France"
+    documentation_url: "https://open-meteo.com/en/docs/meteofrance-api"
+    provider: "Météo-France"
+    region: "France"
+    spatial_resolution_km: 1.3
+    active: true
+    meta_path: meteofrance_arome_france0025
+    probe_point: [48.8, 2.3]
+  meteofrance_arome_france_hd:
+    name: "AROME France HD"
+    documentation_url: "https://open-meteo.com/en/docs/meteofrance-api"
+    provider: "Météo-France"
+    region: "France"
+    spatial_resolution_km: 1.5
+    active: true
+    probe_point: [48.8, 2.3]
+  italia_meteo_arpae_icon_2i:
+    name: "ItaliaMeteo ARPAE ICON-2i"
+    documentation_url: "https://open-meteo.com/en/docs/italia-meteo-arpae-api"
+    provider: "ItaliaMeteo / ARPAE"
+    region: "Italy"
+    spatial_resolution_km: 2.2
+    active: true
+    probe_point: [44.5, 11.3]
+  metno_seamless:
+    name: "MET Norway Nordic Seamless (with ECMWF)"
+    documentation_url: "https://open-meteo.com/en/docs/metno-api"
+    provider: "MET Norway"
+    region: "Nordic"
+    spatial_resolution_km: 2.5
+    active: true
+    probe_point: [59.9, 10.7]
+  metno_nordic:
+    name: "MET Norway Nordic"
+    documentation_url: "https://open-meteo.com/en/docs/metno-api"
+    provider: "MET Norway"
+    region: "Nordic"
+    spatial_resolution_km: 2.5
+    active: true
+    meta_path: metno_nordic_pp
+    probe_point: [59.9, 10.7]
+  knmi_seamless:
+    name: "KNMI Seamless (with ECMWF)"
+    documentation_url: "https://open-meteo.com/en/docs/knmi-api"
+    provider: "KNMI"
+    region: "Europe / Netherlands"
+    spatial_resolution_km: 2.5
+    active: true
+    probe_point: [52.1, 5.2]
+  knmi_harmonie_arome_europe:
+    name: "KNMI Harmonie AROME Europe"
+    documentation_url: "https://open-meteo.com/en/docs/knmi-api"
+    provider: "KNMI"
+    region: "Europe"
+    spatial_resolution_km: 5.0
+    active: true
+    probe_point: [52.1, 5.2]
+  knmi_harmonie_arome_netherlands:
+    name: "KNMI Harmonie AROME Netherlands"
+    documentation_url: "https://open-meteo.com/en/docs/knmi-api"
+    provider: "KNMI"
+    region: "Netherlands"
+    spatial_resolution_km: 2.5
+    active: true
+    probe_point: [52.1, 5.2]
+  dmi_seamless:
+    name: "DMI Seamless (with ECMWF)"
+    documentation_url: "https://open-meteo.com/en/docs/dmi-api"
+    provider: "DMI"
+    region: "Europe / Denmark"
+    spatial_resolution_km: 2.5
+    active: true
+    probe_point: [55.7, 12.6]
+  dmi_harmonie_arome_europe:
+    name: "DMI Harmonie AROME Europe"
+    documentation_url: "https://open-meteo.com/en/docs/dmi-api"
+    provider: "DMI"
+    region: "Europe"
+    spatial_resolution_km: 2.5
+    active: true
+    probe_point: [55.7, 12.6]
+  ukmo_seamless:
+    name: "UK Met Office Seamless"
+    documentation_url: "https://open-meteo.com/en/docs/ukmo-api"
+    provider: "UK Met Office"
+    region: "Global / UK"
+    spatial_resolution_km: 2.0
+    active: true
+    probe_point: [51.5, -0.1]
+  ukmo_global_deterministic_10km:
+    name: "UK Met Office Global 10km"
+    documentation_url: "https://open-meteo.com/en/docs/ukmo-api"
+    provider: "UK Met Office"
+    region: "Global"
+    spatial_resolution_km: 10.0
+    active: true
+    ensemble_meta_path: ukmo_global_ensemble_20km
+    probe_point: [51.5, -0.1]
+  ukmo_uk_deterministic_2km:
+    name: "UK Met Office UK 2km"
+    documentation_url: "https://open-meteo.com/en/docs/ukmo-api"
+    provider: "UK Met Office"
+    region: "UK"
+    spatial_resolution_km: 2.0
+    active: true
+    ensemble_meta_path: ukmo_uk_ensemble_2km
+    probe_point: [51.5, -0.1]
+  meteoswiss_icon_seamless:
+    name: "MeteoSwiss Seamless"
+    documentation_url: "https://open-meteo.com/en/docs/meteoswiss-api"
+    provider: "MeteoSwiss"
+    region: "Switzerland / Alps"
+    spatial_resolution_km: 1.1
+    active: true
+    probe_point: [46.8, 8.2]
+  meteoswiss_icon_ch1:
+    name: "MeteoSwiss ICON CH1"
+    documentation_url: "https://open-meteo.com/en/docs/meteoswiss-api"
+    provider: "MeteoSwiss"
+    region: "Switzerland / Alps"
+    spatial_resolution_km: 1.1
+    active: true
+    ensemble_meta_path: meteoswiss_icon_ch1_ensemble
+    probe_point: [46.8, 8.2]
+  meteoswiss_icon_ch2:
+    name: "MeteoSwiss ICON CH2"
+    documentation_url: "https://open-meteo.com/en/docs/meteoswiss-api"
+    provider: "MeteoSwiss"
+    region: "Central Europe / Alps"
+    spatial_resolution_km: 2.1
+    active: true
+    ensemble_meta_path: meteoswiss_icon_ch2_ensemble
+    probe_point: [46.8, 8.2]
+  geosphere_seamless:
+    name: "GeoSphere Seamless (with ECMWF)"
+    documentation_url: "https://open-meteo.com/en/docs/geosphere-austria-api"
+    provider: "GeoSphere Austria"
+    region: "Austria / Alps"
+    spatial_resolution_km: 2.5
+    active: true
+    probe_point: [47.5, 14.5]
+  # GeoSphere stopped AROME Austria on 2026-11-04 (last run 03 UTC); C-LAEF
+  # follows it (REQ-767). Kept in the catalogue, but in no chain.
+  geosphere_arome_austria:
+    name: "GeoSphere AROME Austria"
+    documentation_url: "https://open-meteo.com/en/docs/geosphere-austria-api"
+    provider: "GeoSphere Austria"
+    region: "Austria / Alps"
+    spatial_resolution_km: 2.5
+    active: false
+    probe_point: [47.5, 14.5]
+  geosphere_claef_austria:
+    name: "GeoSphere C-LAEF Austria"
+    documentation_url: "https://open-meteo.com/en/docs/geosphere-austria-api"
+    provider: "GeoSphere Austria"
+    region: "Austria / Alps"
+    spatial_resolution_km: 1.0
+    active: true
+    probe_point: [47.5, 14.5]

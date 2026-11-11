@@ -1,0 +1,226 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Base layout: one column on narrow screens (regions stacked in page order), on wide screens the
+ * location picker on the left and the header on the right (in one card) above the full-width content.
+ * .app is the size container, so the switch follows the available width, not only the viewport.
+ */
+.app {
+  container: app / inline-size;
+  min-height: 100vh;
+  min-height: 100dvh;
+  /*
+   * The page reaches the screen's edges (viewport-fit=cover, REQ-618): a phone in landscape reports its camera's inset
+   * at the sides, and the page keeps clear of it as Safari kept it before, with its own margin inside. Here, so the
+   * container queries below see the width beside the camera as before. 0 on desktops, tablets and in portrait.
+   */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  /* Nothing may widen the page sideways: Safari would let it scroll and show it shifted (REQ-547). */
+  overflow-x: clip;
+}
+
+.app__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "top"
+    "main"
+    "footer";
+  grid-template-rows: auto 1fr auto;
+  /* Read by the phone's footer, which takes back the gap above it (REQ-577). */
+  --app-gap: var(--space-3);
+  gap: var(--app-gap);
+  width: 100%;
+  max-width: var(--page-max-width);
+  min-height: inherit;
+  margin-inline: auto;
+  /*
+   * Top and bottom margin of the page (set below), each with the screen's inset on top (REQ-618): the status bar above
+   * the installed app, the home indicator below it, where the screen reports them. In Safari the footer's room covers
+   * the bottom (REQ-581, REQ-614, Footer.css), so the bottom inset is left out there. Inside the page, so the chart's
+   * room on a phone counts it (usePortraitSpace.ts).
+   */
+  --page-top: var(--space-3);
+  --page-bottom: var(--space-3);
+  padding: calc(var(--page-top) + env(safe-area-inset-top)) var(--page-gutter)
+    calc(var(--page-bottom) + var(--page-bottom-inset, env(safe-area-inset-bottom)));
+}
+
+.app__inner:has(.footer--safari) {
+  --page-bottom-inset: 0px;
+}
+
+/*
+ * Place and header bar share one card (REQ-450): the card look moves from the two regions to the wrapper, so there
+ * is no seam between them. Stacked on narrow screens with the header first, side by side on wide ones with the header
+ * at the top edge.
+ */
+.app__top {
+  grid-area: top;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-surface);
+}
+
+.app__location,
+.app__header {
+  min-width: 0;
+}
+
+/* Phones (REQ-459): language, settings and info above the place. */
+.app__header {
+  order: -1;
+}
+
+.app__top > div > .region {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Phone (REQ-580): no card around the place row; the row stands on the page background, as wide as the other cards. */
+.app__top--bare {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.app__top--bare > div > .region {
+  padding: 0;
+}
+
+.app__main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.app__footer {
+  grid-area: footer;
+  min-width: 0;
+}
+
+/*
+ * Phone (REQ-577, REQ-580): the footer follows the chart closely also when the page is shorter than the screen; the
+ * space left over stays below the footer instead of opening between chart and footer.
+ */
+.app__inner:has(> .app__footer .footer--phone) {
+  grid-template-rows: auto auto 1fr;
+}
+
+.app__footer:has(.footer--phone) {
+  align-self: start;
+}
+
+/*
+ * Tablet (REQ-728, REQ-742): the phone's design also where the page is wider than a phone's. Each phone rule of the
+ * stylesheets is followed by the same rule under `:where(.app--tablet)`. Style queries are not used for this: Safari
+ * before 18 drops a whole `@container … or style(…)` rule, and with it the phone design on the iPad.
+ */
+
+/* On a phone the page ends with the footer row (REQ-561): no space below it to scroll to. */
+@container app (max-width: 40rem) {
+  .app__inner {
+    --page-bottom: 0px;
+  }
+}
+
+/* Tablet (REQ-728, REQ-742): the same rules by the class, without style queries. */
+:where(.app--tablet) .app__inner {
+  --page-bottom: 0px;
+}
+
+@container app (min-width: 48rem) {
+  .app__inner {
+    --app-gap: var(--space-4);
+    --page-top: var(--space-4);
+    --page-bottom: var(--space-4);
+  }
+
+  .app__top {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .app__header {
+    order: 0;
+  }
+}
+
+/*
+ * Tablet (REQ-728): the phone's gaps and margins also where the page is wider than 48rem, after the rule above. The side
+ * margin is the phone's own at the iPhone it was measured on (16 px of 390 px, a third smaller, REQ-722), not a share of
+ * the much wider screen.
+ */
+.app.app--tablet {
+  --page-gutter: calc(16px * 2 / 3);
+}
+
+/* Tablet (REQ-728, REQ-742): the same rules by the class, without style queries. */
+:where(.app--tablet) .app__inner {
+  --app-gap: var(--space-3);
+  --page-top: var(--space-3);
+  --page-bottom: 0px;
+}
+
+/*
+ * Tablet (REQ-731, REQ-748): the place row on the left, the desktop's header bar on the right in the same row, whatever
+ * the width, as long as both fit (useTopRowFits.ts). The row looks as on the desktop: in the desktop's card with its
+ * paddings, so the search field is as wide as on a desktop of the same width. Classes only, no style query: Safari
+ * before 18 has none.
+ */
+.app__top.app__top--row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.app__top--row .app__header {
+  order: 0;
+}
+
+.app__top--row .header {
+  padding: var(--space-3) var(--space-4);
+}
+
+.app__top--row .header__language {
+  margin-inline-end: 0;
+}
+
+/* Tablet with the phone's menu (REQ-731): the search field takes the row's free width, the menu stands at its end. */
+.app--tablet .location__bar:has(> .phone-menu) > .location__search {
+  max-width: none;
+}
+
+/*
+ * Phone in the browser (REQ-586): the place row starts at the page's top edge. Safari already leaves about as much room
+ * below its address bar as there is between place row and day slider. The installed app starts below the status bar
+ * and keeps the margin. After the container queries, so it also wins over their padding.
+ */
+.app__inner--flush-top {
+  --page-top: 0px;
+}
+
+/*
+ * Desktop (REQ-465): half the side margin between the cards and the window edge it had before (1rem gutter and half
+ * the width beyond the 80rem page): 0.5rem plus a quarter of the width beyond 80rem; the page grows with the window.
+ * Set on .app, since tokens.css (loaded after this file) defines the gutter on :root.
+ */
+@media (min-width: 64rem) {
+  .app {
+    --page-gutter: var(--space-2);
+  }
+
+  .app__inner {
+    max-width: none;
+    padding-inline: calc(var(--page-gutter) + max(0px, 100% - var(--page-max-width)) / 4);
+  }
+}
