@@ -20,5 +20,7 @@ Die gebaute Website (`apps/web/dist`) ist statisch und läuft auf jedem Webspace
 ## Lizenzen
 
 Jedes Paket nennt seine Lizenz in `LICENSE` und `package.json`: die Website und der Domain Viewer stehen unter
-GPL-3.0-or-later, die Bibliotheken unter MPL-2.0, die aus Open-Meteo abgeleiteten Modelldaten unter CC BY 4.0. Fremde
-Bestandteile und ihre Lizenzen stehen in den Dateien `THIRD_PARTY_LICENSES.md` der Pakete.
+GPL-3.0-or-later (Lizenztext auch in [`LICENSE`](LICENSE) im Wurzelverzeichnis), die Bibliotheken unter MPL-2.0, die
+aus Open-Meteo abgeleiteten Modelldaten unter CC BY 4.0. Fremde Bestandteile und ihre Lizenzen stehen in den Dateien
+`THIRD_PARTY_LICENSES.md` der Pakete; die Übersicht mit Links steht in
+[`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
