@@ -570,8 +570,13 @@ for (const { name, viewport, isMobile, buttons } of [
  */
 for (const scheme of ["light", "dark"] as const) {
   for (const { viewport, locale, menu: menuName, links: names } of [
-    { viewport: { width: 375, height: 812 }, locale: "en-GB", menu: "Menu", links: ["Info", "Legal notice", "Privacy"] },
-    { viewport: { width: 375, height: 812 }, locale: "de-DE", menu: "Menü", links: ["Info", "Impressum", "Datenschutz"] },
+    { viewport: { width: 375, height: 812 }, locale: "en-GB", menu: "Menu", links: ["Info", "Help", "Legal notice", "Privacy"] },
+    {
+      viewport: { width: 375, height: 812 },
+      locale: "de-DE",
+      menu: "Menü",
+      links: ["Info", "Hilfe", "Impressum", "Datenschutz"],
+    },
   ]) {
     test.describe(`phone ${viewport.width} px, ${locale}, ${scheme}`, () => {
       test.use({ viewport, locale, isMobile: true, hasTouch: true, colorScheme: scheme });
@@ -606,7 +611,7 @@ for (const scheme of ["light", "dark"] as const) {
         expect(sourceBox.x).toBeGreaterThanOrEqual(saveBox.x + saveBox.width);
         expect(Math.abs(sourceBox.x + sourceBox.width - (footerBox.x + footerBox.width))).toBeLessThan(2);
 
-        // Info, imprint and privacy are in the menu of the place row.
+        // Info, help (REQ-853), imprint and privacy are in the menu of the place row.
         await page.locator('[data-region="location"]').getByRole("button", { name: menuName }).click();
         const panel = page.getByTestId("phone-menu-panel");
         await expect(panel.getByRole("button").last()).toHaveText(names.at(-1)!);

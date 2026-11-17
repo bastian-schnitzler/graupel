@@ -25,6 +25,7 @@ import {
   MAP_ATTRIBUTION_OPTIONS,
   PICK_SOURCES,
   applyLayerHighlights,
+  correctAttribution,
   enlargeMapLabels,
   featureKey,
   featurePlace,
@@ -92,7 +93,7 @@ export default function MaptoolkitMap({
       m.addControl(new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }), "top-right");
       // The style may have started loading with the library (REQ-771); should that fail, MapLibre tries once more.
       const applyStyle = (style: string | StyleSpecification) => {
-        if (alive) m.setStyle(style, { transformStyle: (_previous, next) => enlargeMapLabels(next) });
+        if (alive) m.setStyle(style, { transformStyle: (_previous, next) => enlargeMapLabels(correctAttribution(next)) });
       };
       const prefetched = takeMaptoolkitStyle();
       if (prefetched) prefetched.then(applyStyle, () => applyStyle(MAPTOOLKIT_STYLE));

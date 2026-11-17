@@ -178,8 +178,36 @@ describe("change of place (REQ-751)", () => {
       join(dirname(dirname(fileURLToPath(import.meta.url))), "src/regions/LocationPicker/LocationPicker.css"),
       "utf8",
     );
-    expect(css).toMatch(/\.location__loading-icon \{[^}]*animation: location-loading-turn/);
+    expect(css).toMatch(/\.location__loading-icon \.icon__turn \{[^}]*animation: location-loading-turn/);
     const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
-    expect(reduced).toMatch(/\.location__loading-icon \{[^}]*animation: none/);
+    expect(reduced).toMatch(/\.location__loading-icon \.icon__turn \{[^}]*animation: none/);
+  });
+
+  // REQ-860: as in the day slider, the group inside the picture turns about the view box's centre, the circle's.
+  it("turns the group inside the field's symbol about the circle's centre, not the picture (REQ-860)", async () => {
+    fakeDevice(true);
+    const { loader, pending } = pendingLoader();
+    renderPage(loader);
+    await act(async () => pending[0]!(forecastFixture()));
+    await screen.findByTestId("meteogram-scroll");
+    fireEvent.click(screen.getByRole("button", { name: "Innsbruck" }));
+    const icon = gpsButton().querySelector("svg")!;
+    expect(icon.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(icon.children).toHaveLength(1);
+    const turn = icon.firstElementChild!;
+    expect(turn.tagName.toLowerCase()).toBe("g");
+    expect(turn.classList.contains("icon__turn")).toBe(true);
+    expect(turn.querySelector("path")!.getAttribute("d")).toBe("M20 12a8 8 0 1 1-2.34-5.66L20 9M20 4v5h-5");
+
+    const css = readFileSync(
+      join(dirname(dirname(fileURLToPath(import.meta.url))), "src/regions/LocationPicker/LocationPicker.css"),
+      "utf8",
+    );
+    const rule = /\n\.location__loading-icon \.icon__turn \{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(rule).toContain("transform-box: view-box;");
+    expect(rule).toContain("transform-origin: 12px 12px;");
+    const own = /\n\.location__loading-icon \{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(own).not.toMatch(/animation|transform/);
+    await act(async () => pending[1]!(forecastFixture({ name: "Innsbruck" })));
   });
 });

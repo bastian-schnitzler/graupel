@@ -110,9 +110,9 @@ test.describe("pull to refresh on the whole page (REQ-750)", () => {
       await expect(page.getByTestId("forecast-loading")).toHaveText("Loading forecast…");
       await expect(box(page)).toHaveAttribute("data-loading", "");
       await expect(icon(page)).toBeVisible();
-      expect(await icon(page).evaluate((element) => getComputedStyle(element).animationName)).toBe(
-        "day-slider-loading-turn",
-      );
+      // The group inside the symbol turns, about the circle's centre (REQ-860).
+      const turn = icon(page).locator(".icon__turn");
+      expect(await turn.evaluate((element) => getComputedStyle(element).animationName)).toBe("day-slider-loading-turn");
       await expect(card(page)).not.toHaveAttribute("data-pull");
       api.hold = null;
       release();

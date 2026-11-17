@@ -1,0 +1,86 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Popup for renaming a favourite on a phone or a tablet (REQ-862): a narrow dialog with the question as its title, the
+ * field over the whole width and below it "Cancel" and "OK" at the right, OK in the accent colour as the install
+ * button of the install dialog.
+ */
+.dialog.rename-dialog {
+  width: min(24rem, calc(100vw - 2 * (var(--space-4) + var(--safe-area-x))));
+}
+
+.rename-dialog .dialog__title {
+  overflow-wrap: anywhere;
+}
+
+.rename-dialog__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+}
+
+/* At least 16 px (REQ-578): Safari on the iPhone zooms into a focused field with smaller text. */
+.rename-dialog__field {
+  width: 100%;
+  min-height: 2.5rem;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  font-size: max(var(--font-size-md), 16px);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+}
+
+.rename-dialog__field:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
+.rename-dialog__field[aria-invalid="true"] {
+  border-color: var(--color-error, #b42318);
+  outline-color: var(--color-error, #b42318);
+}
+
+.rename-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.rename-dialog__button {
+  min-width: 5.5rem;
+  min-height: 2.5rem;
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rename-dialog__button--ok {
+  color: var(--color-accent-contrast);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.rename-dialog__button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+@media (hover: hover) {
+  .rename-dialog__button:hover:not(:disabled) {
+    background: var(--color-surface-muted);
+  }
+
+  .rename-dialog__button--ok:hover:not(:disabled) {
+    background: var(--color-accent);
+    filter: brightness(1.1);
+  }
+}

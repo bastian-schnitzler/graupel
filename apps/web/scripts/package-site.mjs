@@ -8,7 +8,9 @@
  *
  * Usage: node scripts/package-site.mjs [--dist <dir>] [--out <file>]
  *        (defaults: dist, release/graupel-site.zip, relative to apps/web)
- * After writing, the archive is read back and checked for index.html, config.json, the license files and assets/.
+ * After writing, the archive is read back and checked for index.html, config.json, the license files and assets/,
+ * and that every icon, the manifest, its screenshots and the logo the page points to is in it, outside folders the web
+ * server maps elsewhere (checkSite, REQ-777, REQ-779, REQ-807; the Vite build runs the same check on dist/).
  */
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -148,6 +150,135 @@ export function checkSiteEntries(names) {
   return problems;
 }
 
+/**
+ * Top-level folders that a web server may map somewhere else, so files of the site there never reach a visitor
+ * (REQ-777, REQ-779). Apache's default configuration has `Alias /icons/ "/usr/share/apache2/icons/"` (mod_alias, the
+ * symbols of directory listings): a request for /icons/logo-192.png is answered from that folder, with 404, even
+ * though the file lies in the site's own icons/. A .htaccess cannot undo an Alias. Version 0.4.0 shipped its icons
+ * there, and on the hoster's Apache every one of them was missing. The other entries are aliases of some
+ * distributions (ScriptAlias /cgi-bin/, /error/, /manual/).
+ */
+export const RESERVED_FOLDERS = ["icons/", "cgi-bin/", "error/", "manual/"];
+
+/** Folder of the app icons, the favicon PNG and the logo of the About tab (index.html, manifest, AboutPanel). */
+export const ICON_FOLDER = "app-icons/";
+
+/** Problems of a site's file list: files in RESERVED_FOLDERS, one entry per folder. */
+export function checkServedPaths(names) {
+  return RESERVED_FOLDERS.filter((folder) => names.some((name) => name.startsWith(folder))).map(
+    (folder) => `${folder} is mapped elsewhere by Apache (Alias), its files would be missing on the server`,
+  );
+}
+
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const PAGE_BASE = "https://site.invalid/";
+
+/** The value of attribute `name` in the start tag `tag`, or undefined. */
+function attribute(tag, name) {
+  const match = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(tag);
+  return match ? (match[1] ?? match[2] ?? match[3]) : undefined;
+}
+
+/** File of the site that `ref`, written in the file `from`, points to; null if `ref` is not relative. */
+function resolveReference(ref, from) {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(ref) || ref.startsWith("/")) return null;
+  const url = new URL(ref, new URL(from, PAGE_BASE));
+  return decodeURIComponent(url.pathname.slice(1));
+}
+
+/**
+ * The files the page points to without a bundler in between (REQ-777, REQ-779): icon, apple-touch-icon and manifest
+ * links in index.html, the icons and screenshots of the manifest (REQ-807), and paths into ICON_FOLDER in the bundle
+ * (the logo of the About tab, `BASE_URL` "./", relative to the page). Each { from, rel, ref, path, type, sizes }: path
+ * is the file in the site, or null for a reference that is not relative to the page; sizes as the manifest gives it.
+ * @param {Map<string, Uint8Array>} files
+ */
+export function siteReferences(files) {
+  const references = [];
+  const html = files.get("index.html");
+  if (!html) return references;
+  for (const [tag] of Buffer.from(html).toString("utf8").matchAll(/<link\b[^>]*>/gi)) {
+    const rels = (attribute(tag, "rel") ?? "").toLowerCase().split(/\s+/);
+    const rel = ["icon", "apple-touch-icon", "manifest"].find((name) => rels.includes(name));
+    const ref = attribute(tag, "href");
+    if (!rel || ref === undefined) continue;
+    references.push({ from: "index.html", rel, ref, path: resolveReference(ref, "index.html"), type: attribute(tag, "type") });
+  }
+  for (const link of references.filter((reference) => reference.rel === "manifest" && reference.path)) {
+    const text = files.get(link.path);
+    if (!text) continue;
+    let manifest;
+    try {
+      manifest = JSON.parse(Buffer.from(text).toString("utf8"));
+    } catch {
+      continue;
+    }
+    for (const [key, rel] of [["icons", "manifest icon"], ["screenshots", "manifest screenshot"]]) {
+      for (const image of manifest[key] ?? []) {
+        const path = resolveReference(image.src, link.path);
+        references.push({ from: link.path, rel, ref: image.src, path, type: image.type, sizes: image.sizes });
+      }
+    }
+  }
+  const inBundle = new RegExp(`${ICON_FOLDER.replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&")}[\\w.-]+`, "g");
+  for (const [name, data] of files) {
+    if (!name.startsWith("assets/") || !name.endsWith(".js")) continue;
+    for (const ref of new Set(Buffer.from(data).toString("utf8").match(inBundle) ?? [])) {
+      references.push({ from: name, rel: "bundle", ref, path: ref });
+    }
+  }
+  return references;
+}
+
+/**
+ * Width and height of a PNG from its header, or null for data that is no PNG.
+ * @param {Uint8Array} data
+ */
+export function pngSize(data) {
+  const buffer = Buffer.from(data);
+  if (buffer.length < 24 || !buffer.subarray(0, 8).equals(PNG_SIGNATURE)) return null;
+  return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+}
+
+/**
+ * Problems of the references of siteReferences: not relative to the page (the site runs under any domain and
+ * subpath), missing, in RESERVED_FOLDERS, no PNG where a PNG is announced, or a PNG whose size is not among the
+ * `sizes` the manifest gives for it (REQ-807: browsers skip such screenshots).
+ * @param {Map<string, Uint8Array>} files
+ */
+export function checkSiteReferences(files) {
+  const problems = [];
+  for (const { from, rel, ref, path, type, sizes } of siteReferences(files)) {
+    const where = `${from} (${rel}) ${ref}`;
+    if (path === null) {
+      problems.push(`${where}: not relative to the page`);
+      continue;
+    }
+    const data = files.get(path);
+    if (!data) problems.push(`${where}: ${path} missing`);
+    else if ((type === "image/png" || path.endsWith(".png")) && !Buffer.from(data).subarray(0, 8).equals(PNG_SIGNATURE)) {
+      problems.push(`${where}: ${path} is not a PNG`);
+    } else if (sizes && sizes !== "any") {
+      const size = pngSize(data);
+      const actual = size && `${size.width}x${size.height}`;
+      if (actual && !sizes.split(/\s+/).includes(actual)) problems.push(`${where}: ${path} is ${actual}, not ${sizes}`);
+    }
+    const folder = RESERVED_FOLDERS.find((reserved) => path.startsWith(reserved));
+    if (folder) problems.push(`${where}: ${folder} is mapped elsewhere by Apache (Alias)`);
+  }
+  return problems;
+}
+
+/** All problems of a built site (`collectFiles` entries): required files, served paths and references. */
+export function checkSite(entries) {
+  const names = entries.map((entry) => entry.name);
+  return [
+    ...checkSiteEntries(names),
+    ...checkServedPaths(names),
+    ...checkSiteReferences(new Map(entries.map((entry) => [entry.name, entry.data]))),
+  ];
+}
+
 /** Packs `distDir` into `outFile`, reads the archive back and checks it. Returns the entry names. */
 export function packageSite(distDir, outFile) {
   if (!statSync(distDir, { throwIfNoEntry: false })?.isDirectory()) {
@@ -156,8 +287,9 @@ export function packageSite(distDir, outFile) {
   const zip = createZip(collectFiles(distDir));
   mkdirSync(dirname(outFile), { recursive: true });
   writeFileSync(outFile, zip);
-  const names = readZip(readFileSync(outFile)).map((entry) => entry.name);
-  const problems = checkSiteEntries(names);
+  const entries = readZip(readFileSync(outFile));
+  const names = entries.map((entry) => entry.name);
+  const problems = checkSite(entries);
   if (problems.length > 0) throw new Error(`${outFile}: ${problems.join(", ")}`);
   return names;
 }

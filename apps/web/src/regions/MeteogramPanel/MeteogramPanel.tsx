@@ -612,7 +612,7 @@ export function MeteogramPanel() {
                   options={embeddedOptions}
                   visibleRange={visibleRange}
                 />
-                {/* While the weather chain is hidden: info buttons in the model headers (REQ-643). */}
+                {/* Info buttons in the model headers (REQ-643; on a phone or a tablet always with headers, REQ-820). */}
                 <ModelHeaderInfo containerRef={scrollRef} chain={input.chain} />
               </div>
               {/*

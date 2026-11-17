@@ -83,7 +83,7 @@ export interface PrivacyConfig {
 
 /**
  * Known hosting providers (REQ-710): the one that actually serves the site, named in the Hosting section of the privacy
- * policy. The domains use ALL-INKL, the preview on GitHub Pages uses GitHub Pages.
+ * policy. The graupel domains use ALL-INKL; a site served by GitHub Pages names GitHub Pages.
  */
 export const HOSTING_PROVIDERS = ["github-pages", "all-inkl"] as const;
 export type HostingProvider = (typeof HOSTING_PROVIDERS)[number];

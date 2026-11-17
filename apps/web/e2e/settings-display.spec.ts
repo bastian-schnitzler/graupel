@@ -59,6 +59,9 @@ test("the model chain switched off leaves no card on the page (REQ-471)", async 
   const block = page.locator('[data-region="model-chain"]');
   await expect(block).toBeVisible();
   const meteogram = page.getByTestId("meteogram-card");
+  // Measured once the page stands: the block grows with its cards, the chart is drawn.
+  await expect(block.locator(".model-card").first()).toBeVisible();
+  await expect(chart(page)).toBeVisible();
   const shownTop = (await meteogram.boundingBox())!.y;
 
   const dialog = await openSettings(page, "Models");

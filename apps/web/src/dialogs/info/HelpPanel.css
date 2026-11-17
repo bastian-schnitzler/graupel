@@ -1,0 +1,233 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Help tab of the info popup (REQ-819): five sections one below the other, each a heading, a drawn picture across the
+ * width (at most about the width of the popup on a desktop) and its text. The pictures take the page's colours like the
+ * install steps (pictures.css); the colours of the meteogram's curves are the tooltip's (tokens.css), so they too
+ * follow the light and dark design.
+ */
+.help {
+  --help-probability: #7c3aed;
+  --help-now: #e11d48;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .help {
+    --help-probability: #a78bfa;
+    --help-now: #fb7185;
+  }
+}
+
+:root[data-theme="dark"] .help {
+  --help-probability: #a78bfa;
+  --help-now: #fb7185;
+}
+
+.help__section + .help__section {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.help__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+}
+
+.help__picture {
+  display: block;
+  width: 100%;
+  max-width: 28rem;
+  height: auto;
+  margin: 0 0 var(--space-2);
+}
+
+.help__text {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+}
+
+.help__text + .help__text {
+  margin-top: var(--space-2);
+}
+
+.help__list {
+  margin: var(--space-2) 0 0;
+  padding-left: 1.25rem;
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+}
+
+.help__list > li + li {
+  margin-top: var(--space-1);
+}
+
+/* The drawing (user units of the 200 units wide pictures). */
+.hp-divider {
+  stroke: var(--color-border);
+  stroke-width: 0.75;
+}
+
+.hp-star {
+  fill: #c98a1b;
+}
+
+.hp-grip {
+  fill: var(--color-text-muted);
+}
+
+.hp-chain--weather {
+  fill: var(--color-accent);
+}
+
+.hp-chain--cloud {
+  fill: var(--color-text-muted);
+}
+
+.hp-chain--0 {
+  fill-opacity: 0.55;
+}
+
+.hp-chain--1 {
+  fill-opacity: 0.38;
+}
+
+.hp-chain--2 {
+  fill-opacity: 0.22;
+}
+
+/* The phone's day slider: the page's blue with its contrast colour. */
+.hp-strip {
+  fill: var(--color-accent);
+}
+
+.hp-strip-text {
+  font-family: var(--font-family);
+  font-weight: 600;
+  fill: var(--color-accent-contrast);
+}
+
+.hp-strip-line {
+  fill: var(--color-accent-contrast);
+  fill-opacity: 0.7;
+}
+
+.hp-strip-glyph {
+  fill: none;
+  stroke: var(--color-accent-contrast);
+  stroke-width: 0.8;
+}
+
+/* Days outside the period chosen. */
+.hp-day--out {
+  opacity: 0.4;
+}
+
+.hp-marker {
+  fill: none;
+  stroke: var(--color-text-muted);
+  stroke-width: 1.2;
+}
+
+.hp-badge {
+  fill: var(--color-today);
+}
+
+.hp-badge-text {
+  font-family: var(--font-family);
+  font-size: 7px;
+  font-weight: 700;
+  fill: #1b2430;
+}
+
+.hp-today {
+  fill: var(--color-today);
+}
+
+.hp-cloud {
+  fill: var(--color-text-muted);
+}
+
+.hp-rain {
+  fill: var(--graupel-tooltip-precipitation);
+}
+
+.hp-probability {
+  fill: none;
+  stroke: var(--help-probability);
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+}
+
+.hp-zero {
+  stroke: var(--color-accent);
+  stroke-width: 0.5;
+}
+
+.hp-temperature {
+  fill: none;
+  stroke: var(--graupel-tooltip-temperature);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.hp-temperature--felt {
+  stroke-width: 0.9;
+  stroke-dasharray: 2.5 1.8;
+}
+
+.hp-wind {
+  fill: none;
+  stroke: var(--graupel-tooltip-wind);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.hp-wind--gust {
+  stroke-width: 1.1;
+  stroke-dasharray: 0.1 2;
+}
+
+.hp-arrow-circle {
+  fill: var(--color-surface);
+  stroke: var(--color-border);
+  stroke-width: 0.5;
+}
+
+.hp-arrow {
+  fill: none;
+  stroke: var(--graupel-tooltip-wind);
+  stroke-width: 0.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hp-now {
+  stroke: var(--help-now);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+}
+
+.hp-value {
+  font-family: var(--font-family);
+  font-size: 6.5px;
+  font-weight: 600;
+}
+
+.hp-value--temperature {
+  fill: var(--graupel-tooltip-temperature);
+}
+
+.hp-value--rain {
+  fill: var(--graupel-tooltip-precipitation);
+}
+
+.hp-value--probability {
+  fill: var(--help-probability);
+}
+
+.hp-value--wind {
+  fill: var(--graupel-tooltip-wind);
+}

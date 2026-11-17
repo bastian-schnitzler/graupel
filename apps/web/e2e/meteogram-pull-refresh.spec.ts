@@ -171,7 +171,9 @@ test.describe("phone, portrait", () => {
     await expect(page.getByText("Loading forecast…")).toHaveCount(1);
     await expect(box(page)).toHaveAttribute("data-loading", "");
     expect(await box(page).evaluate((element, text) => element.contains(text), await message.elementHandle())).toBe(true);
-    expect(await icon(page).evaluate((element) => getComputedStyle(element).animationName)).toBe("day-slider-loading-turn");
+    // The group inside the symbol turns, about the circle's centre (REQ-860).
+    const turn = icon(page).locator(".icon__turn");
+    expect(await turn.evaluate((element) => getComputedStyle(element).animationName)).toBe("day-slider-loading-turn");
     await expect.poll(() => tops(page)).toEqual(before);
     await expect(card(page)).not.toHaveAttribute("data-pull-settling");
     expect(await tops(page)).toEqual(before);

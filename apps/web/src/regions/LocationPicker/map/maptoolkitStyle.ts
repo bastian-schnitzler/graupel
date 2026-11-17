@@ -111,6 +111,28 @@ export function enlargeMapLabels(style: StyleSpecification): StyleSpecification 
   };
 }
 
+/** Text outside the HTML tags with OpenStreetMap spelled as the project does; URLs inside the tags stay unchanged. */
+function spellOpenStreetMap(html: string): string {
+  return html.replace(/(^|>)([^<]*)/g, (_match, start: string, text: string) =>
+    start + text.replace(/open\s*street\s*map/gi, "OpenStreetMap"),
+  );
+}
+
+/**
+ * OpenStreetMap in its own spelling (REQ-774): the Maptoolkit style credits "© Openstreetmap"; the map shows
+ * "© OpenStreetMap" like the OpenTopoMap attribution (REQ-644). Links and the Maptoolkit credit stay as they are.
+ */
+export function correctAttribution(style: StyleSpecification): StyleSpecification {
+  const sources = Object.fromEntries(
+    Object.entries(style.sources ?? {}).map(([id, source]) => {
+      const attribution = (source as { attribution?: unknown }).attribution;
+      if (typeof attribution !== "string") return [id, source];
+      return [id, { ...source, attribution: spellOpenStreetMap(attribution) }];
+    }),
+  ) as StyleSpecification["sources"];
+  return { ...style, sources };
+}
+
 /** Label layers whose features can be picked as named places. */
 export const PICK_SOURCES = new Set(["place_label", "water_label", "poi_label"]);
 

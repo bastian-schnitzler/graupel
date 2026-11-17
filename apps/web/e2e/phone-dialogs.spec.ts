@@ -52,12 +52,19 @@ const chart = (page: Page) => page.locator('[data-region="meteogram"] svg.meteog
 const weatherChain = (page: Page) => page.locator('[data-region="model-chain"]').first();
 const modelInfo = (page: Page) => page.getByTestId("model-info-popover");
 
-/** Opens the page, with the weather chain's cards shown or hidden (then the info buttons sit in the chart's header). */
-async function open(page: Page, chain: boolean) {
-  await page.addInitScript((shown) => {
-    window.localStorage.setItem("graupel.showWeatherChain", String(shown));
-    window.localStorage.setItem("graupel.showCloudChain", String(shown));
-  }, chain);
+/**
+ * Opens the page, with the chains' cards shown or hidden (then the info buttons sit in the chart's header), with or
+ * without model headers. With headers only the cloud chain's cards have info buttons (REQ-820).
+ */
+async function open(page: Page, chain: boolean, headers = true) {
+  await page.addInitScript(
+    ({ shown, headers }) => {
+      window.localStorage.setItem("graupel.showWeatherChain", String(shown));
+      window.localStorage.setItem("graupel.showCloudChain", String(shown));
+      window.localStorage.setItem("graupel.modelHeaders", String(headers));
+    },
+    { shown: chain, headers },
+  );
   await page.goto(APP);
   await expect(chart(page)).toBeVisible();
 }
@@ -302,7 +309,8 @@ test.describe("iphone, picture", () => {
   ownDevice();
 
   test("model info dialog on the iPhone", async ({ page }) => {
-    await open(page, true);
+    // The weather chain's first card, which has its info button only without model headers (REQ-820).
+    await open(page, true, false);
     await weatherChain(page).getByRole("button", { name: /^Details for / }).first().tap();
     const dialog = modelInfo(page);
     await expect(dialog).toBeVisible();

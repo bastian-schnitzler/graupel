@@ -7,14 +7,15 @@
  * the name, that model has none. The buttons are HTML laid over the chart, placed at the core's header segments
  * (`model-label-segment` with `data-model`, `data-start-x`, `data-end-x`) and their labels (`model-header-label`);
  * they follow zoom, the day selection and sideways scrolling. They are not part of the SVG, so the copied or saved
- * image has none.
+ * image has none. On a phone or a tablet they stand there whenever the model headers are shown, also beside the weather
+ * chain card, whose cards then have none (REQ-820, `modelInfoPlaces`).
  */
 import type { WeatherModel } from "@graupel/download";
 import type { MeteogramInput } from "@graupel/meteogram";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type RefObject, type SyntheticEvent } from "react";
 import { getModelMetadataWithFallback } from "../ModelChain/chain/chainUtils.ts";
-import { ModelInfoButton } from "../ModelChain/chain/ModelInfo.tsx";
-import { useChainCardsVisible, useChainSelection } from "../../state/index.ts";
+import { ModelInfoButton, useModelInfoPlaces } from "../ModelChain/chain/ModelInfo.tsx";
+import { useChainSelection } from "../../state/index.ts";
 
 /** Largest icon (CSS px), as on a chain card. */
 const MAX_SIZE_PX = 16;
@@ -140,8 +141,9 @@ export interface ModelHeaderInfoProps {
 }
 
 export function ModelHeaderInfo({ containerRef, chain, reserveEnd }: ModelHeaderInfoProps) {
-  // Only while the weather chain card is hidden; with the card shown its own info buttons are there.
-  const shown = !useChainCardsVisible().weather;
+  // On the desktop only while the weather chain card is hidden, with the card shown its own info buttons are there
+  // (REQ-643); on a phone or a tablet whenever the model headers are shown (REQ-820).
+  const shown = useModelInfoPlaces().header;
   const { available } = useChainSelection();
   const layerRef = useRef<HTMLDivElement | null>(null);
   const [placements, setPlacements] = useState<InfoPlacement[]>([]);

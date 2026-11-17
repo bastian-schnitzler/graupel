@@ -10,7 +10,7 @@
  * meteogram follow the visible range (REQ-656): on or off, without an own choice on. Likewise whether the meteogram
  * shows its legend (REQ-639): on or off, without an own choice on. The installed app adds how many days its archive
  * keeps (REQ-684, REQ-686) and, on a phone, whether the history slider is shown (REQ-686), both without a value in
- * config.json.
+ * config.json. The website adds whether it hides its install button (REQ-809), also without a value in config.json.
  */
 import {
   isDewPointMode,
@@ -329,6 +329,40 @@ export function useHistorySlider(): boolean {
   return choice ?? DEFAULT_HISTORY_SLIDER;
 }
 
+// --- install button of the website (REQ-809) -------------------------------------------------------------------------
+
+export const HIDE_INSTALL_BUTTON_STORAGE_KEY = "graupel.hideInstallButton";
+
+/** Install button without an own choice: shown (REQ-809). */
+export const DEFAULT_HIDE_INSTALL_BUTTON = false;
+
+/**
+ * Own choice whether the website hides its install button (REQ-809): the button in the header (desktop, tablet) and
+ * the entry in the phone's menu. Chosen in the tab Design of the settings, which offers it on the website only (the
+ * installed app has no such button). No, the default, is not stored; yes is (`"true"`).
+ */
+export const hideInstallButtonChoice = storedChoice<boolean>(
+  HIDE_INSTALL_BUTTON_STORAGE_KEY,
+  decodeBoolean,
+  encodeBoolean,
+);
+
+/** Whether the install button is hidden: the stored choice, else no. */
+export function readHideInstallButton(): boolean {
+  return hideInstallButtonChoice.read() ?? DEFAULT_HIDE_INSTALL_BUTTON;
+}
+
+/** Stores the choice (no removes the stored choice) and tells every `useHideInstallButton()`. */
+export function setHideInstallButton(hide: boolean): void {
+  hideInstallButtonChoice.set(hide === DEFAULT_HIDE_INSTALL_BUTTON ? null : hide);
+}
+
+/** Whether the website hides its install button on this page (REQ-809). */
+export function useHideInstallButton(): boolean {
+  const [choice] = hideInstallButtonChoice.use();
+  return choice ?? DEFAULT_HIDE_INSTALL_BUTTON;
+}
+
 /** Forgets choices kept for this visit only (tests). */
 export function resetDisplaySettings(): void {
   for (const choice of [
@@ -342,6 +376,7 @@ export function resetDisplaySettings(): void {
     legendChoice,
     archiveDaysChoice,
     historySliderChoice,
+    hideInstallButtonChoice,
   ]) {
     choice.reset();
   }

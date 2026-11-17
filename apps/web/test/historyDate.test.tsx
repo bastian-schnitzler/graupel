@@ -158,17 +158,23 @@ describe("current values in the list (REQ-727)", () => {
     expect(screen.getByTestId("history-current").textContent).toBe("Current values");
   });
 
-  it("gives the entry gold text and a gold bar at the side, marked, focused or not", () => {
+  // The gold bar always, shown or not (REQ-727, DEC-145); the entry shown is told by its check and weight (REQ-782).
+  it("gives the entry gold text and a gold bar at the side, shown or not (REQ-727, DEC-145)", () => {
     const rule = (selector: string) => {
       const start = css.indexOf(`${selector} {`);
       expect(start, selector).toBeGreaterThanOrEqual(0);
       return css.slice(start, css.indexOf("}", start));
     };
     expect(rule(".history-list")).toMatch(/--history-current: #b7791f/);
-    const current = rule('.history-list__current,\n.history-list__current[aria-current="true"]');
+    const current = rule(".history-list__current");
     expect(current).toMatch(/color: var\(--history-current\)/);
     expect(current).toMatch(/box-shadow: inset 3px 0 0 var\(--history-current\)/);
-    expect(rule(".history-list__current:focus")).toMatch(/box-shadow: inset 3px 0 0 var\(--history-current\)/);
+    // Shown, it stays gold (not the accent colour of the entry shown) and keeps the bar of the rule above.
+    const shown = rule('.history-list__current[aria-current="true"]');
+    expect(shown).toMatch(/color: var\(--history-current\)/);
+    expect(shown).not.toMatch(/box-shadow: none/);
+    // Focus shows by the background, without a bar of its own.
+    expect(rule(".history-list__item:focus")).not.toMatch(/box-shadow/);
     // A dark theme has its own gold.
     expect(css).toMatch(/\[data-theme="dark"\] \.history-list \{\s*--history-current: #e0a940/);
   });

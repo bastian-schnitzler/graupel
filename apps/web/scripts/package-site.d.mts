@@ -13,4 +13,19 @@ export function createZip(entries: readonly ZipEntry[]): Buffer;
 export function readZip(buffer: Buffer): { name: string; data: Buffer }[];
 export function collectFiles(dir: string): { name: string; data: Buffer }[];
 export function checkSiteEntries(names: readonly string[]): string[];
+export const RESERVED_FOLDERS: readonly string[];
+export const ICON_FOLDER: string;
+export interface SiteReference {
+  from: string;
+  rel: string;
+  ref: string;
+  path: string | null;
+  type?: string;
+  sizes?: string;
+}
+export function checkServedPaths(names: readonly string[]): string[];
+export function siteReferences(files: ReadonlyMap<string, Uint8Array>): SiteReference[];
+export function pngSize(data: Uint8Array): { width: number; height: number } | null;
+export function checkSiteReferences(files: ReadonlyMap<string, Uint8Array>): string[];
+export function checkSite(entries: readonly { name: string; data: Uint8Array }[]): string[];
 export function packageSite(distDir: string, outFile: string): string[];

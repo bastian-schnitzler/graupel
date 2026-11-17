@@ -53,9 +53,9 @@ const chart = (page: Page) => page.locator('[data-region="meteogram"] svg.meteog
 const box = (page: Page) => page.getByTestId("day-slider-loading");
 const message = (page: Page) => page.getByTestId("forecast-loading");
 
-/** How the field's symbol moves: its animation and its transform. */
+/** How the field's symbol moves: the animation and transform of its group that turns (REQ-860). */
 const motion = (page: Page) =>
-  fieldIcon(page).evaluate((element) => {
+  fieldIcon(page).locator(".icon__turn").evaluate((element) => {
     const style = getComputedStyle(element);
     return { animation: style.animationName, transform: style.transform };
   });

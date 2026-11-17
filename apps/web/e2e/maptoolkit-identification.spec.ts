@@ -58,7 +58,7 @@ async function openMap(page: Page, url: string) {
   await page.getByRole("button", { name: "Map", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Map" });
   await expect(dialog).toHaveAttribute("data-provider", "maptoolkit");
-  await expect(dialog.locator(".maplibregl-ctrl-attrib")).toContainText("© Maptoolkit © Openstreetmap");
+  await expect(dialog.locator(".maplibregl-ctrl-attrib")).toContainText("© Maptoolkit © OpenStreetMap") // REQ-774: spelling corrected from the style's "Openstreetmap";
 }
 
 for (const domain of ["graupel.eu", "graupel.at", "graupel.ch", "graupel.fr", "graupel.it"]) {

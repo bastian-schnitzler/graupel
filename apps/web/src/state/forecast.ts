@@ -15,8 +15,14 @@
  * desktop and the pull to refresh of the phone: past the cache of whole results, the answers in memory and the
  * browser's HTTP cache (the page has no service worker). Place, chain and day selection stay; `refreshing` tells while
  * that load runs.
+ *
+ * REQ-861: a load always ends, at the latest after `LOAD_TIMEOUT_MS`, with a `ForecastTimeoutError`; a 429 of
+ * Open-Meteo ends it within `OVERLOAD_GRACE_MS` with that answer, so the error card and "Try again" come at the same
+ * place instead of a loading message that only a new place ends.
  */
 import {
+  ApiError,
+  DEFAULT_FORECAST_URL,
   createClient,
   createMemoryCache,
   downloadChain,
@@ -42,8 +48,49 @@ import {
 import { loadModelData } from "../services/modelData.ts";
 import { createResponseMemory, type ResponseMemoryOptions } from "../services/responseMemory.ts";
 import { useChainSelection } from "./chain.ts";
+import { ForecastTimeoutError } from "./forecastFailure.ts";
 import { useLocation } from "./location.tsx";
 import { placeKey } from "./place.ts";
+
+/**
+ * Time limit of one load of the forecast (REQ-861), from its start to its result: past it the page stops waiting and
+ * shows the error with "Try again". A load normally takes a few seconds (Open-Meteo answers each request in well under a
+ * second); 45 s leaves room for a slow mobile connection and for one hung request that the client gives up after
+ * `REQUEST_TIMEOUT_MS` and two retries (10 + 0.5 + 10 + 1 + 10 = 31.5 s), so that a single hung optional request (sun
+ * times, clouds, run search) still lets the forecast show; only a load that hangs as a whole fails.
+ */
+export const LOAD_TIMEOUT_MS = 45_000;
+
+/**
+ * Time limit of one attempt of a request to Open-Meteo (REQ-861), instead of the 60 s of `@graupel/download`. The largest
+ * answer of a chain (about 100 kB) takes some 2 s even at 400 kbit/s; a request without an answer after 10 s hangs.
+ * With the client's two retries a hung request fails after 31.5 s instead of 181.5 s.
+ */
+export const REQUEST_TIMEOUT_MS = 10_000;
+
+/**
+ * How long a load may still run once Open-Meteo answered one of its forecast requests with 429 (REQ-861: too many
+ * concurrent requests, a request limit): a load that still ends in this time shows what it got (a failing model only
+ * loses its slice), else it stops with that answer, so the error does not wait for requests that hang meanwhile. The
+ * remaining requests of a load that is nearly done answer within a few seconds.
+ */
+export const OVERLOAD_GRACE_MS = 5_000;
+
+/** The 429 answer of a forecast request as the client reports it, with Open-Meteo's `reason` (REQ-861). */
+async function overloadError(url: string, response: Response): Promise<ApiError> {
+  let reason: string | null = null;
+  try {
+    const body = JSON.parse(await response.clone().text()) as { reason?: unknown } | null;
+    if (body && typeof body.reason === "string" && body.reason) reason = body.reason;
+  } catch {
+    // Body without JSON: the status alone.
+  }
+  return new ApiError(`Open-Meteo API Error: ${reason ?? `HTTP ${response.status}`}`, {
+    status: response.status,
+    reason,
+    url,
+  });
+}
 
 export type ForecastStatus = "idle" | "loading" | "ready" | "error";
 
@@ -112,6 +159,9 @@ export interface ForecastLoaderOptions extends Pick<ResponseMemoryOptions, "ttlM
  * (REQ-504): a request for another point, and `refresh`, forget them. While a `refresh` load runs, its requests also
  * pass the browser's HTTP cache (`cache: "reload"`, REQ-637): the run metadata (`meta.json`) comes with
  * `Last-Modified`, which a browser may otherwise answer from its cache for a while.
+ *
+ * REQ-861: each attempt of a request ends after `REQUEST_TIMEOUT_MS`; a 429 answer to a forecast request ends the
+ * running load within `OVERLOAD_GRACE_MS` with that answer.
  */
 export function createForecastLoader(options: ForecastLoaderOptions = {}): ForecastLoader {
   if (options.client) {
@@ -121,10 +171,20 @@ export function createForecastLoader(options: ForecastLoaderOptions = {}): Forec
   const { fetch: network = (input, init) => fetch(input, init), ttlMs, maxEntries, maxResults = 64 } = options;
   // Refresh loads running; while there is one, every request goes past the HTTP cache (REQ-637).
   let refreshing = 0;
-  const bypass: FetchLike = (input, init) => network(input, refreshing > 0 ? { ...init, cache: "reload" } : init);
+  // Loads running, told of a 429 answer (REQ-861). The page aborts a load before it starts the next one, so this is
+  // mostly one; Open-Meteo's limits hold for every load of the page alike.
+  const running = new Set<(error: ApiError) => void>();
+  const bypass: FetchLike = async (input, init) => {
+    const response = await network(input, refreshing > 0 ? { ...init, cache: "reload" } : init);
+    if (response.status === 429 && input.startsWith(DEFAULT_FORECAST_URL) && running.size) {
+      const error = await overloadError(input, response);
+      for (const overloaded of running) overloaded(error);
+    }
+    return response;
+  };
   const memory = createResponseMemory({ fetch: bypass, ttlMs, maxEntries });
   const results = createMemoryCache<ForecastResult>({ maxEntries: maxResults });
-  const client = createClient({ fetch: memory.fetch, cache: results });
+  const client = createClient({ fetch: memory.fetch, cache: results, timeoutMs: REQUEST_TIMEOUT_MS });
   let point: string | null = null;
   return async (request) => {
     const { latitude, longitude } = request.location;
@@ -134,12 +194,34 @@ export function createForecastLoader(options: ForecastLoaderOptions = {}): Forec
       void results.clear?.();
     }
     point = next;
-    if (!request.refresh) return downloadChain(client, request, await loadModelData());
-    refreshing += 1;
+    // The load's own signal: aborted with the page's, or after a 429 and `OVERLOAD_GRACE_MS` (REQ-861).
+    const controller = new AbortController();
+    const outer = request.signal;
+    const forward = () => controller.abort(outer?.reason);
+    if (outer?.aborted) forward();
+    else outer?.addEventListener("abort", forward, { once: true });
+    let grace: ReturnType<typeof setTimeout> | undefined;
+    let stop: (error: ApiError) => void = () => {};
+    const stopped = new Promise<never>((_resolve, reject) => {
+      stop = reject;
+    });
+    const overloaded = (error: ApiError) => {
+      if (grace !== undefined) return;
+      grace = setTimeout(() => {
+        controller.abort(error);
+        stop(error);
+      }, OVERLOAD_GRACE_MS);
+    };
+    running.add(overloaded);
+    if (request.refresh) refreshing += 1;
     try {
-      return await downloadChain(client, request, await loadModelData());
+      const data = await loadModelData();
+      return await Promise.race([downloadChain(client, { ...request, signal: controller.signal }, data), stopped]);
     } finally {
-      refreshing -= 1;
+      if (request.refresh) refreshing -= 1;
+      running.delete(overloaded);
+      clearTimeout(grace);
+      outer?.removeEventListener("abort", forward);
     }
   };
 }
@@ -317,12 +399,21 @@ export function ForecastProvider({ loader = pageLoader, children }: ForecastProv
       busy = false;
       gate.end();
     };
+    // REQ-861: a load that has not ended after LOAD_TIMEOUT_MS is aborted and fails, whatever hangs in it.
+    const deadline = setTimeout(() => {
+      const error = new ForecastTimeoutError(LOAD_TIMEOUT_MS);
+      controller.abort(error);
+      setSettled({ key, point: loadPoint, reloads: reload, now: now.now, error });
+      done();
+    }, LOAD_TIMEOUT_MS);
     loader(request).then(
       (result) => {
+        clearTimeout(deadline);
         if (!controller.signal.aborted) setSettled({ key, point: loadPoint, reloads: reload, now: now.now, result });
         done();
       },
       (error: unknown) => {
+        clearTimeout(deadline);
         // Only the page's own abort is no outcome. Any other failure settles the load, also an AbortError the page did
         // not ask for (e.g. a request the browser cancelled itself): it would else stay loading for good (REQ-760).
         if (!controller.signal.aborted) setSettled({ key, point: loadPoint, reloads: reload, now: now.now, error });
@@ -330,6 +421,7 @@ export function ForecastProvider({ loader = pageLoader, children }: ForecastProv
       },
     );
     return () => {
+      clearTimeout(deadline);
       controller.abort();
       done();
     };

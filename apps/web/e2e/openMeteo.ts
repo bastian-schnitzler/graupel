@@ -53,6 +53,11 @@ export interface FakeForecastOptions {
   values?: Readonly<Record<string, (index: number) => number>>;
   /** Time the answers start from (ms), instead of the current hour; for pictures that must not change (REQ-566). */
   now?: number;
+  /**
+   * Own values by variable and time of the hour (ms), the same in every model's answer whatever its past hours; for
+   * weather that looks real (manifest screenshots, REQ-807). Undefined keeps the value of `values` or the built-in one.
+   */
+  at?: (variable: string, time: number) => number | undefined;
 }
 
 /** Answers one forecast request of the page with the fake data. */
@@ -71,7 +76,7 @@ export async function fakeForecast(route: Route, options: FakeForecastOptions = 
   const units: Record<string, string> = {};
   for (const variable of variables) {
     const own = options.values?.[variable];
-    hourly[variable] = times.map((_, i) => (own ? own(i) : value(variable, i)));
+    hourly[variable] = times.map((time, i) => options.at?.(variable, time) ?? (own ? own(i) : value(variable, i)));
     units[variable] = unit(variable);
   }
   return route.fulfill({ json: { timezone: "GMT", hourly, hourly_units: units } });

@@ -13,7 +13,7 @@ Secondary License, section 3.3; CC BY 4.0 covers data, not code).
 
 | Part | Source | License there | License here |
 |---|---|---|---|
-| logo and favicon (`public/favicon.svg`, `public/icons/`), the Graupel cloud | `scripts/graupel-cloud.svg` (own work of the project, reduced by `scripts/generate-icons.mjs`) | – | GPL-3.0-or-later |
+| logo and favicon (`public/favicon.svg`, `public/app-icons/`), the Graupel cloud | `scripts/graupel-cloud.svg` (own work of the project, reduced by `scripts/generate-icons.mjs`) | – | GPL-3.0-or-later |
 | line icons (`src/icons/`, `src/regions/LocationPicker/Icon.tsx`) | drawn for this site | – | GPL-3.0-or-later |
 | everything else | written for this site | – | GPL-3.0-or-later |
 

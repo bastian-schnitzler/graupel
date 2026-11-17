@@ -40,7 +40,8 @@ test.beforeEach(async ({ page }) => {
 
 const region = (page: Page) => page.locator('[data-region="location"]');
 const menu = (page: Page) => page.getByRole("menu", { name: "Favourites" });
-const renameField = (page: Page) => menu(page).getByRole("textbox", { name: "Name of the favourite" });
+/** The rename field: in the menu's row on the desktop, in a popup on the phone (REQ-862). */
+const renameField = (page: Page) => page.getByRole("textbox", { name: "Name of the favourite" });
 const fontSize = (page: Page) => renameField(page).evaluate((node) => parseFloat(getComputedStyle(node).fontSize));
 
 /** A map point saved as a favourite before the page loads. */
@@ -120,7 +121,7 @@ test.describe("on the phone (REQ-578)", () => {
     await expectNoZoomingField(page, 2);
     await phoneMenu.click();
 
-    // Favourites menu while renaming.
+    // Favourites menu while renaming in the popup (REQ-862); Escape closes the popup, then the menu.
     await region(page).getByRole("button", { name: "Show favourites" }).click();
     await menu(page).getByRole("menuitem", { name: `Rename ${POINT}` }).click();
     await expect(renameField(page)).toBeFocused();

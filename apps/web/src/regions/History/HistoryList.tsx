@@ -7,12 +7,13 @@
  * ones in fold-outs per month of this year and per year with fold-outs per month (`groupHistory`). Once the current
  * values are more than 20 minutes old (REQ-757) there is no gold entry: their fetch stands among the earlier ones,
  * without gold, and still chooses the current values. The fetch shown and the fold-outs holding it are marked and
- * open. Arrow up and down, Home and End move between the entries shown; arrow right opens a fold-out, arrow left closes
- * it or goes to the one holding the entry.
+ * open: only the entry shown is bold with a check at its end (REQ-782); the gold current values keep their gold bar at
+ * the side either way (DEC-145). Arrow up and down, Home and End move between the entries shown;
+ * arrow right opens a fold-out, arrow left closes it or goes to the one holding the entry.
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useI18n } from "../../i18n/index.ts";
-import { ChevronRightIcon } from "../../icons/index.ts";
+import { CheckIcon, ChevronRightIcon } from "../../icons/index.ts";
 import type { ArchivedFetchInfo } from "../../services/fetchArchive.ts";
 import { groupHistory, type HistoryNode } from "../../state/index.ts";
 import { formatFetchTime, formatMonth } from "./format.ts";
@@ -57,6 +58,9 @@ function pathTo(nodes: readonly HistoryNode[], id: string): string[] | null {
 /** The entries of the list that can be reached (not inside a closed fold-out). */
 const reachable = (root: HTMLElement) =>
   [...root.querySelectorAll<HTMLButtonElement>("button")].filter((button) => !button.closest("[hidden]"));
+
+/** The check at the end of the entry shown (REQ-782); `aria-current` names it to assistive technology. */
+const ShownCheck = () => <CheckIcon className="icon history-list__check" data-testid="history-shown-check" />;
 
 export function HistoryList({
   fetches,
@@ -144,6 +148,7 @@ export function HistoryList({
             onClick={() => (isCurrent ? onCurrent() : onShow(node.fetch))}
           >
             {formatFetchTime(node.fetch.fetchedAt, locale)}
+            {current && <ShownCheck />}
           </button>
         </li>
       );
@@ -191,6 +196,7 @@ export function HistoryList({
               onClick={onCurrent}
             >
               {currentTime ?? t("history.current")}
+              {shown === null && <ShownCheck />}
             </button>
           </li>
         )}

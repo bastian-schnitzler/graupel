@@ -110,7 +110,8 @@ describe("reason of a failed forecast (REQ-632)", () => {
   });
 
   it("decides a tie by the order of FORECAST_FAILURES: Open-Meteo's answers first, the general reason last", () => {
-    expect(FORECAST_FAILURES).toEqual(["dailyLimit", "concurrent", "unavailable", "offline", "general"]);
+    // REQ-861: "timeout" is the reason of a whole load that timed out, never one of several.
+    expect(FORECAST_FAILURES).toEqual(["dailyLimit", "concurrent", "unavailable", "timeout", "offline", "general"]);
     expect(forecastFailure(allFailed(concurrent(), daily()))).toBe("dailyLimit");
     expect(forecastFailure(allFailed(network(), overloaded()))).toBe("unavailable");
     expect(forecastFailure(allFailed(overloaded(), concurrent()))).toBe("concurrent");

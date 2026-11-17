@@ -1,6 +1,6 @@
 {
   "name": "@graupel/download",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Lädt Wettermodellketten von Open-Meteo und setzt sie zu einer stündlichen Zeitachse zusammen.",
   "private": true,
   "license": "MPL-2.0",

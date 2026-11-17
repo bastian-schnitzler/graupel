@@ -11,7 +11,7 @@ import {
   createAppModeStore,
   createInstallPromptStore,
   detectAppMode,
-  installPlatform,
+  installGuide,
   useAppMode,
   type AppModeWindow,
   type BeforeInstallPromptEvent,
@@ -126,24 +126,17 @@ describe("install prompt", () => {
     expect(store.getSnapshot()).toBe("none");
   });
 
-  // REQ-658: the hint names only what works on this device and browser.
+  // REQ-658: a browser that cannot install at all gets the hint without pictures, naming only what works on this
+  // device and browser. The steps with pictures (REQ-775) are tested in installGuide.test.ts.
   it.each([
-    ["Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Version/17.5 Mobile Safari/604.1", 5, "ios"],
-    ["Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0.6478.54 Mobile/15E148 Safari/604.1", 5, "ios"],
-    ["Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) EdgiOS/126.0.2592.56 Version/17.0 Mobile/15E148 Safari/604.1", 5, "ios"],
-    ["Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/127.0 Mobile/15E148 Safari/605.1.15", 5, "ios"],
-    ["Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0.6478.54 Mobile/15E148 Safari/604.1", 5, "ios"],
-    ["Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.5 Safari/605.1.15", 5, "ios"],
-    ["Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.5 Safari/605.1.15", 0, "macos"],
     ["Mozilla/5.0 (Macintosh; Intel Mac OS X 14.5; rv:128.0) Gecko/20100101 Firefox/128.0", 0, "macosOther"],
     ["Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", 0, "macosOther"],
-    ["Mozilla/5.0 (Android 14; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0", 5, "android"],
     ["Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36", 5, "android"],
     ["Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0", 0, "desktop"],
     ["Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0", 0, "desktop"],
     ["Mozilla/5.0 (X11; CrOS x86_64 15917.71.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", 0, "desktop"],
-  ])("platform of %s (%i touch points) is %s", (userAgent, maxTouchPoints, platform) => {
-    expect(installPlatform({ userAgent, maxTouchPoints })).toBe(platform);
+  ])("hint of %s (%i touch points) is %s", (userAgent, maxTouchPoints, hint) => {
+    expect(installGuide({ userAgent, maxTouchPoints })).toEqual({ kind: "hint", hint });
   });
 
   it.each(LANGUAGES)("names no other device in %s (REQ-658)", (language) => {
@@ -173,15 +166,25 @@ function renderHeader(display: ReturnType<typeof fakeDisplay>, installPrompt: In
 const download = () => screen.queryByRole("button", { name: "Download" });
 
 describe("download button", () => {
-  it("opens the install prompt on the website and disappears after installing", async () => {
+  // REQ-806: the dialog with why to install comes first; its button shows the browser's prompt.
+  it("opens the install dialog on the website, whose button shows the install prompt, and disappears after installing", async () => {
     const win = fakeInstallWindow(true);
     const store = createInstallPromptStore(win);
     renderHeader(fakeDisplay(), store);
     expect(download()).toBeNull();
     const { event, prompt } = promptEvent();
     act(() => void win.dispatchEvent(event));
+    expect(download()!.getAttribute("aria-haspopup")).toBe("dialog");
     fireEvent.click(download()!);
+    expect(prompt).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog", { name: "Install Graupel as an app" });
+    // REQ-843: the reasons as a list, without the heading "Why install?".
+    expect(within(within(dialog).getByTestId("install-why")).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(dialog).queryByRole("heading", { name: "Why install?" })).toBeNull();
+    expect(dialog.querySelector("[data-platform], [data-guide]")).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Install now" }));
     expect(prompt).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(download()).toBeNull();
     // Dismissed: Chromium offers the prompt again.
     act(() => void win.dispatchEvent(promptEvent().event));
@@ -189,6 +192,24 @@ describe("download button", () => {
     act(() => void win.dispatchEvent(new Event("appinstalled")));
     expect(download()).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("closes the install dialog when the app is installed meanwhile (REQ-806)", () => {
+    const win = fakeInstallWindow(true);
+    const store = createInstallPromptStore(win);
+    renderHeader(fakeDisplay(), store);
+    const { event, prompt } = promptEvent();
+    act(() => void win.dispatchEvent(event));
+    fireEvent.click(download()!);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    act(() => void win.dispatchEvent(new Event("appinstalled")));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(download()).toBeNull();
+    // A later prompt does not open the dialog again by itself.
+    act(() => void win.dispatchEvent(promptEvent().event));
+    expect(download()).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(prompt).not.toHaveBeenCalled();
   });
 
   it("is hidden in the installed app, also with a prompt, and follows the display mode", () => {
@@ -230,7 +251,7 @@ describe("install texts", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: translate(language, "header.download") }));
     expect(screen.getByRole("dialog", { name: translate(language, "install.title") })).toBeTruthy();
-    for (const platform of ["ios", "android", "macos", "macosOther", "desktop"] as const) {
+    for (const platform of ["ios", "iosSafari", "android", "macosUpdate", "macosOther", "desktop"] as const) {
       expect(translate(language, `install.${platform}`)).not.toBe(
         language === "en" ? "" : translate("en", `install.${platform}`),
       );

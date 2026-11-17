@@ -65,6 +65,7 @@ export function Header({ showDownload = false, onDownload }: HeaderProps) {
             type="button"
             className="header__button header__button--icon header__button--download"
             title={t("header.download")}
+            aria-haspopup="dialog"
             onClick={onDownload}
           >
             <DownloadIcon />

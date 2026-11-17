@@ -2,13 +2,16 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was
 // not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // Model chain download and stitching. Open-Meteo is a fake behind an injected fetch: no network.
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AllModelsFailedError,
+  ApiError,
+  DownloadTimeoutError,
   HOUR_MS,
   OutOfDomainError,
   canonicalTimestamp,
   createClient,
+  createMemoryCache,
   createResolver,
   downloadChain,
   findCatalogueModel,
@@ -22,6 +25,7 @@ import {
   yesterdayMidnightUtc,
   type DownloadChainRequest,
   type DownloadData,
+  type ForecastCache,
   type ForecastResult,
   type WeatherModel,
 } from "../src/index";
@@ -952,6 +956,215 @@ describe("downloadChain: replacement of a model without current data (REQ-767)",
     );
     expect(manual.chain.map((m) => m.id)).toEqual(["icon_eu"]);
     expect(withoutDomains.ofKind("forecast")).toHaveLength(2);
+  });
+});
+
+// REQ-863: stop early when Open-Meteo is overloaded or does not answer (values of DEC-181).
+describe("downloadChain: early stop and total limit (REQ-863)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A request that never answers; the fake fetch rejects it when its signal aborts. */
+  const hang = () => new Promise<never>(() => {});
+  const tooMany = () => json({ error: true, reason: "Too many concurrent requests" }, 429);
+  const DATA: DownloadData = { registry, ...resolverData };
+  const CLOUDS = [
+    { id: "icon_d2", max_forecast_horizon_hours: 24 },
+    { id: "icon_eu", max_forecast_horizon_hours: 24 },
+    { id: "ecmwf_ifs025", max_forecast_horizon_hours: 24 },
+  ];
+
+  /** Follows a download: when (fake clock) and how it settled. */
+  function track<T>(promise: Promise<T>) {
+    const started = Date.now();
+    const state: { settledAfterMs?: number; value?: T; error?: unknown; done: Promise<void> } = {
+      done: promise.then(
+        (value) => {
+          state.value = value;
+          state.settledAfterMs = Date.now() - started;
+        },
+        (error: unknown) => {
+          state.error = error;
+          state.settledAfterMs = Date.now() - started;
+        },
+      ),
+    };
+    return state;
+  }
+
+  function spyCache() {
+    const cache = { get: () => undefined, set: vi.fn<ForecastCache<ForecastResult>["set"]>() };
+    return cache satisfies ForecastCache<ForecastResult>;
+  }
+
+  function request(extra: Partial<DownloadChainRequest> = {}): DownloadChainRequest {
+    return { location: BERLIN, now: NOW, timezone: TZ, chain: D2_EU, quantities: ["temperature"], ...extra };
+  }
+
+  it("REQ-863: throws AllModelsFailedError at once on 429 from every main model and aborts the hanging sun and cloud requests", async () => {
+    const api = fakeOpenMeteo({ forecast: tooMany, cloud: hang, sun: hang });
+    // Three places: sun and both main models first; the clouds take the places the main models free.
+    const outcome = track(
+      download(api, { chain: D2_EU, quantities: ["temperature"], cloudChain: CLOUDS }, { concurrency: 3 }),
+    );
+    await vi.advanceTimersByTimeAsync(120_000);
+    await outcome.done;
+
+    expect(outcome.error).toBeInstanceOf(AllModelsFailedError);
+    // Without waiting for the 10 s timeout of the hanging requests.
+    expect(outcome.settledAfterMs).toBe(0);
+    const errors = (outcome.error as AllModelsFailedError).errors;
+    expect(Object.keys(errors)).toEqual(["ICON-D2", "ICON-EU"]);
+    for (const error of Object.values(errors)) expect((error as ApiError).status).toBe(429);
+    const hanging = [...api.ofKind("sun"), ...api.ofKind("cloud")];
+    expect(hanging.map((c) => c.kind)).toEqual(["sun", "cloud", "cloud"]);
+    expect(hanging.every((c) => c.signal?.aborted)).toBe(true);
+    // The third cloud request was still waiting for a place: it never starts, nothing is retried.
+    expect(api.calls).toHaveLength(5);
+  });
+
+  it("REQ-863: keeps the result of the delivering models and waits for a hanging cloud request until it gives up", async () => {
+    const api = fakeOpenMeteo({
+      forecast: (call) => (call.model === "icon_d2" ? tooMany() : perModel({ icon_eu: 20 })!(call)),
+      cloud: hang,
+    });
+    // Default per attempt (10 s) and backoff (0.5 s, 1 s): the cloud request gives up after 31.5 s.
+    const outcome = track(
+      download(api, { chain: D2_EU, quantities: ["temperature"], cloudChain: [CLOUDS[2]!] }, { retryBackoffMs: 500 }),
+    );
+    await vi.advanceTimersByTimeAsync(31_499);
+    expect(outcome.settledAfterMs).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(1);
+    await outcome.done;
+
+    expect(outcome.settledAfterMs).toBe(31_500);
+    const result = outcome.value as ForecastResult;
+    expect(result.errors["ICON-D2"]).toBeInstanceOf(ApiError);
+    expect((result.errors["ICON-D2"] as ApiError).status).toBe(429);
+    const d2 = result.combined.filter((p) => p.model === "ICON-D2");
+    expect(d2).toHaveLength(PAST + 10);
+    expect(d2.every((p) => p.value === null)).toBe(true);
+    const eu = result.combined.filter((p) => p.model === "ICON-EU");
+    expect(eu).toHaveLength(14);
+    expect(eu.every((p) => p.value !== null)).toBe(true);
+    expect(api.ofKind("cloud")).toHaveLength(3);
+    expect(result.warnings.some((w) => w.startsWith("Failed to fetch forecast data for model 'ICON-D2'"))).toBe(true);
+    expect(result.warnings.some((w) => w.startsWith("Failed to fetch vertical clouds for model"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("timed out after 10000 ms"))).toBe(true);
+  });
+
+  /** Every request hangs; without a timeout per attempt nothing ever gives up by itself. */
+  const allHanging = () => fakeOpenMeteo({ forecast: hang, cloud: hang, sun: hang, meta: hang, singleRun: hang });
+
+  it("REQ-863: rejects with DownloadTimeoutError after 60 s by default, aborts every request and caches nothing", async () => {
+    const api = allHanging();
+    const cache = spyCache();
+    const shared = createClient({ fetch: api.fetch, timeoutMs: 0, cache });
+    expect(shared.totalTimeoutMs).toBe(60_000);
+    const outcome = track(downloadChain(shared, request(), DATA));
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(outcome.settledAfterMs).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(1);
+    await outcome.done;
+
+    expect(outcome.settledAfterMs).toBe(60_000);
+    const error = outcome.error as DownloadTimeoutError;
+    expect(error).toBeInstanceOf(DownloadTimeoutError);
+    expect(error.name).toBe("DownloadTimeoutError");
+    expect(error.timeoutMs).toBe(60_000);
+    expect(error.message).toContain("60000 ms");
+    expect(api.calls.length).toBeGreaterThan(0);
+    expect(api.calls.every((c) => c.signal?.aborted)).toBe(true);
+    expect(cache.set).not.toHaveBeenCalled();
+  });
+
+  it("REQ-863: takes the limit of the client, overridden by the download's own", async () => {
+    const api = allHanging();
+    const shared = createClient({ fetch: api.fetch, timeoutMs: 0, cache: null, totalTimeoutMs: 5_000 });
+    expect(shared.totalTimeoutMs).toBe(5_000);
+
+    const byClient = track(downloadChain(shared, request(), DATA));
+    const byRequest = track(downloadChain(shared, request({ totalTimeoutMs: 2_000 }), DATA));
+    await vi.advanceTimersByTimeAsync(10_000);
+    await Promise.all([byClient.done, byRequest.done]);
+
+    expect(byClient.error).toBeInstanceOf(DownloadTimeoutError);
+    expect(byClient.settledAfterMs).toBe(5_000);
+    expect((byClient.error as DownloadTimeoutError).timeoutMs).toBe(5_000);
+    expect(byRequest.error).toBeInstanceOf(DownloadTimeoutError);
+    expect(byRequest.settledAfterMs).toBe(2_000);
+    expect((byRequest.error as DownloadTimeoutError).message).toContain("2000 ms");
+  });
+
+  it("REQ-863: counts over every step: a hanging meta.json ends the download at the limit without a partial result", async () => {
+    const api = fakeOpenMeteo({ forecast: perModel({ icon_d2: 10, icon_eu: 20 }), meta: hang });
+    const cache = spyCache();
+    const shared = createClient({ fetch: api.fetch, cache, totalTimeoutMs: 20_000 });
+    const outcome = track(downloadChain(shared, request({ cloudChain: [] }), DATA));
+    await vi.advanceTimersByTimeAsync(20_000);
+    await outcome.done;
+
+    expect(outcome.error).toBeInstanceOf(DownloadTimeoutError);
+    expect(outcome.settledAfterMs).toBe(20_000);
+    expect(api.ofKind("forecast")).toHaveLength(2);
+    expect(api.ofKind("meta").every((c) => c.signal?.aborted)).toBe(true);
+    expect(cache.set).not.toHaveBeenCalled();
+  });
+
+  it("REQ-863: 0 or Infinity switches the limit off; the caller's abort rejects with its own reason", async () => {
+    const api = allHanging();
+    const cache = spyCache();
+    const offByClient = createClient({ fetch: api.fetch, timeoutMs: 0, cache, totalTimeoutMs: Infinity });
+    const shared = createClient({ fetch: api.fetch, timeoutMs: 0, cache });
+    const stop = new AbortController();
+    const reason = new Error("left the page");
+    const offRequest = track(downloadChain(shared, request({ totalTimeoutMs: 0, signal: stop.signal }), DATA));
+    const offClient = track(downloadChain(offByClient, request({ signal: stop.signal }), DATA));
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(offRequest.settledAfterMs).toBeUndefined();
+    expect(offClient.settledAfterMs).toBeUndefined();
+
+    stop.abort(reason);
+    await Promise.all([offRequest.done, offClient.done]);
+    expect(offRequest.error).toBe(reason);
+    expect(offClient.error).toBe(reason);
+    expect(api.calls.every((c) => c.signal?.aborted)).toBe(true);
+    expect(cache.set).not.toHaveBeenCalled();
+  });
+
+  it("REQ-863: rejects with the caller's reason, not DownloadTimeoutError, when the caller aborts before the limit", async () => {
+    const api = allHanging();
+    const shared = createClient({ fetch: api.fetch, timeoutMs: 0, cache: null });
+    const stop = new AbortController();
+    const outcome = track(downloadChain(shared, request({ signal: stop.signal }), DATA));
+    await vi.advanceTimersByTimeAsync(1_000);
+    stop.abort(new DOMException("stop", "AbortError"));
+    await outcome.done;
+    expect(outcome.settledAfterMs).toBe(1_000);
+    expect(outcome.error).toBeInstanceOf(DOMException);
+    expect((outcome.error as DOMException).name).toBe("AbortError");
+    // The limit is gone with the download: nothing happens at 60 s.
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(outcome.error).not.toBeInstanceOf(DownloadTimeoutError);
+  });
+
+  it("REQ-863: serves a cache hit at once", async () => {
+    let down = false;
+    const api = fakeOpenMeteo({ forecast: (call) => (down ? hang() : perModel({ icon_d2: 10, icon_eu: 20 })!(call)) });
+    const shared = createClient({ fetch: api.fetch, cache: createMemoryCache<ForecastResult>() });
+    const first = track(downloadChain(shared, request({ cloudChain: [] }), DATA));
+    await first.done;
+    expect(first.error).toBeUndefined();
+    down = true;
+    const second = track(downloadChain(shared, request({ cloudChain: [], totalTimeoutMs: 1 }), DATA));
+    await vi.advanceTimersByTimeAsync(1);
+    await second.done;
+    expect(second.value).toBe(first.value);
+    expect(second.settledAfterMs).toBe(0);
   });
 });
 

@@ -17,6 +17,11 @@ import { fakeForecast, mockOpenMeteo } from "./openMeteo.ts";
 const APP = "http://localhost:4175/";
 /** Fixed time of the portrait tests: Tuesday, 3 November 2026, 12:00 UTC. */
 const FIXED_NOW = Date.UTC(2026, 10, 3, 12);
+/**
+ * A low screen where the page with both model chains scrolls. Since REQ-820 the weather chain's cards have no info
+ * button beside the model headers and are lower, so it is lower than before (560 px).
+ */
+const LOW = 500;
 
 let errors: string[] = [];
 
@@ -163,7 +168,7 @@ for (const mode of ["Safari", "another browser", "installed app"] as const) {
 
     test("with the model chains on a low screen: the chart keeps 40 % of it and the page scrolls", async ({ page }) => {
       await showChains(page);
-      const low = await openAt(page, 560);
+      const low = await openAt(page, LOW);
       await expect(page.locator('[data-region="model-chain"] .model-chain-row')).toHaveCount(2);
       const chains = await settled(page);
       expect(Math.abs(chains.chartHeight - 0.4 * chains.screen)).toBeLessThanOrEqual(1);
@@ -329,8 +334,8 @@ test.describe("Safari's room below the footer only where the page scrolls (REQ-6
   test("where the page scrolls (model chains on a low screen) Safari keeps the room, another browser not", async ({
     browser,
   }) => {
-    const safari = await openIn(browser, "Safari", 560, { chains: true });
-    const other = await openIn(browser, "other", 560, { chains: true });
+    const safari = await openIn(browser, "Safari", LOW, { chains: true });
+    const other = await openIn(browser, "other", LOW, { chains: true });
     expect(safari.room).toBe("80px");
     expect(other.room).toBe("0px");
     for (const page of [safari, other]) {

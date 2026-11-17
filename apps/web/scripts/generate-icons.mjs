@@ -13,7 +13,7 @@
 //
 // Die App-Symbole zeigen die Wolke auf deckendem Hellblau ICON_BACKGROUND (REQ-516), auf dem ihr dunkler Umriss gut
 // sichtbar ist; background_color im Manifest ist seit REQ-750 die Hintergrundfarbe der Seite. Das Favicon
-// (favicon.svg, favicon-32.png) und das Logo im Info-Popup (icons/logo-192.png) bleiben durchsichtig (REQ-662).
+// (favicon.svg, favicon-32.png) und das Logo im Info-Popup (app-icons/logo-192.png) bleiben durchsichtig (REQ-662).
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
@@ -35,16 +35,16 @@ if (!master) throw new Error("Kein eingebettetes PNG in graupel-cloud.svg gefund
 const ICONS = [
   // Favicon ohne Hintergrund (REQ-662): wird in favicon.svg eingebettet
   ["favicon-svg", 128, 0.86, null],
-  ["icons/favicon-32.png", 32, 0.86, null],
+  ["app-icons/favicon-32.png", 32, 0.86, null],
   // iOS rundet die Ecken selbst und füllt Transparenz schwarz: randlos deckend.
-  ["icons/apple-touch-icon.png", 180, 0.72, "square"],
-  ["icons/icon-192.png", 192, 0.78, "rounded"],
-  ["icons/icon-512.png", 512, 0.78, "rounded"],
+  ["app-icons/apple-touch-icon.png", 180, 0.72, "square"],
+  ["app-icons/icon-192.png", 192, 0.78, "rounded"],
+  ["app-icons/icon-512.png", 512, 0.78, "rounded"],
   // maskable: Android schneidet bis auf den Kreis mit 80 % Durchmesser ab; die Wolke bleibt mit 60 % darin.
-  ["icons/icon-192-maskable.png", 192, 0.6, "square"],
-  ["icons/icon-512-maskable.png", 512, 0.6, "square"],
+  ["app-icons/icon-192-maskable.png", 192, 0.6, "square"],
+  ["app-icons/icon-512-maskable.png", 512, 0.6, "square"],
   // Logo im Info-Popup (About), durchsichtig
-  ["icons/logo-192.png", 192, null, null],
+  ["app-icons/logo-192.png", 192, null, null],
 ];
 
 const browser = await chromium.launch(
@@ -128,7 +128,7 @@ const rendered = await page.evaluate(
 );
 await browser.close();
 
-mkdirSync(`${publicDir}icons`, { recursive: true });
+mkdirSync(`${publicDir}app-icons`, { recursive: true });
 for (const [name, dataUrl] of rendered) {
   if (name === "favicon-svg") {
     const svg =

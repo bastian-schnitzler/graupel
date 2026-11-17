@@ -94,7 +94,8 @@ describe("phone menu (REQ-575, REQ-580, REQ-582)", () => {
     expect(menuButton().getAttribute("aria-controls")).toBe(panel().id);
     expect(panel().hidden).toBe(false);
     expect(within(panel()).getByRole("combobox", { name: "Language" })).toBeTruthy();
-    expect(entries()).toEqual(["Language", "Settings", "—", "Info", "Legal notice", "Privacy"]);
+    // Help after Info (REQ-853).
+    expect(entries()).toEqual(["Language", "Settings", "—", "Info", "Help", "Legal notice", "Privacy"]);
     expect(within(panel()).getByRole("separator")).toBeTruthy();
     // A second tap closes it.
     fireEvent.click(menuButton());
@@ -110,6 +111,7 @@ describe("phone menu (REQ-575, REQ-580, REQ-582)", () => {
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
     for (const [entry, tab] of [
       ["Info", "About"],
+      ["Help", "Help"],
       ["Legal notice", "Legal notice"],
       ["Privacy", "Privacy policy"],
     ]) {
@@ -128,7 +130,7 @@ describe("phone menu (REQ-575, REQ-580, REQ-582)", () => {
     fireEvent.change(within(panel()).getByRole("combobox", { name: "Language" }), { target: { value: "de" } });
     expect(panel().hidden).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Menü" }));
-    expect(entries()).toEqual(["Language", "Einstellungen", "—", "Info", "Impressum", "Datenschutz"]);
+    expect(entries()).toEqual(["Language", "Einstellungen", "—", "Info", "Hilfe", "Impressum", "Datenschutz"]);
   });
 
   it("closes on Escape, giving the focus back to its button, and on a tap beside it", () => {
@@ -148,13 +150,13 @@ describe("phone menu (REQ-575, REQ-580, REQ-582)", () => {
     setup({ config: { ...DEFAULT_CONFIG, languages: ["de"], defaultLanguage: "de" } });
     fireEvent.click(screen.getByRole("button", { name: "Menü" }));
     expect(within(panel()).queryByRole("combobox")).toBeNull();
-    expect(entries()).toEqual(["Einstellungen", "—", "Info", "Impressum", "Datenschutz"]);
+    expect(entries()).toEqual(["Einstellungen", "—", "Info", "Hilfe", "Impressum", "Datenschutz"]);
   });
 
   it("offers the installation on the website below the language, highlighted: instructions without prompt (REQ-425)", () => {
     setup({ installed: false });
     fireEvent.click(menuButton());
-    expect(entries()).toEqual(["Language", "Install app", "Settings", "—", "Info", "Legal notice", "Privacy"]);
+    expect(entries()).toEqual(["Language", "Install app", "Settings", "—", "Info", "Help", "Legal notice", "Privacy"]);
     const install = within(panel()).getByRole("button", { name: "Install app" });
     expect(install.classList.contains("phone-menu__item--install")).toBe(true);
     fireEvent.click(install);
@@ -162,7 +164,7 @@ describe("phone menu (REQ-575, REQ-580, REQ-582)", () => {
     expect(screen.getByRole("dialog", { name: "Install Graupel as an app" })).toBeTruthy();
   });
 
-  it("offers the installation on the website with the browser's prompt once Chromium offers it", () => {
+  it("offers the installation on the website with the browser's prompt once Chromium offers it (REQ-806)", () => {
     const win = installWindow(true);
     setup({ installed: false, win });
     fireEvent.click(menuButton());
@@ -175,6 +177,13 @@ describe("phone menu (REQ-575, REQ-580, REQ-582)", () => {
     });
     act(() => void win.dispatchEvent(event));
     fireEvent.click(within(panel()).getByRole("button", { name: "Install app" }));
+    // REQ-806: first the dialog with why to install, its button shows the browser's prompt.
+    expect(prompted).toBe(0);
+    const dialog = screen.getByRole("dialog", { name: "Install Graupel as an app" });
+    // REQ-843: the reasons as a list, without the heading "Why install?".
+    expect(within(within(dialog).getByTestId("install-why")).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(dialog).queryByRole("heading", { name: "Why install?" })).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Install now" }));
     expect(prompted).toBe(1);
     expect(screen.queryByRole("dialog")).toBeNull();
   });
@@ -244,6 +253,7 @@ describe("footer (REQ-582)", () => {
     expect(footer.classList.contains("footer--safari")).toBe(false);
     expect(within(footer).getAllByRole("button").map((button) => button.textContent)).toEqual([
       "Info",
+      "Help",
       "Legal notice",
       "Privacy",
     ]);

@@ -1,0 +1,189 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Install dialog (REQ-425): why to install (REQ-806), then the steps, the hint or the browser's own prompt.
+ * Install steps (REQ-775): three numbered steps side by side, each a drawn picture over its number and a line of text,
+ * also on the phone. Four steps (Safari on the iPhone from iOS 26, REQ-844) stand side by side where there is room and
+ * two by two on the phone. The pictures take the page's colours (InstallPicture.tsx), the highlight is the app's orange.
+ */
+.install-dialog {
+  --install-wallpaper-top: #a9cdeb;
+  --install-wallpaper-bottom: #4c7db0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .install-dialog {
+    --install-wallpaper-top: #2f5578;
+    --install-wallpaper-bottom: #172636;
+  }
+}
+
+:root[data-theme="dark"] .install-dialog {
+  --install-wallpaper-top: #2f5578;
+  --install-wallpaper-bottom: #172636;
+}
+
+/* Why install (REQ-806): two points above the steps, the hint or the install button; no heading (REQ-843). */
+.install-why {
+  margin: 0 0 var(--space-4);
+  padding: 0 0 var(--space-3) 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+.install-why > li + li {
+  margin-top: var(--space-1);
+}
+
+/* The hint without pictures (REQ-658) right below the reasons. */
+.install-dialog [data-platform] {
+  margin: 0;
+}
+
+/* The browser's own install prompt (Chromium): one button that shows it. */
+.install-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.install-dialog__install {
+  min-height: 2.5rem;
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-accent-contrast);
+  background: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .install-dialog__install:hover {
+    filter: brightness(1.1);
+  }
+}
+
+.install-dialog__lead {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.install-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.install-steps[data-count="4"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 30rem) {
+  .install-steps[data-count="4"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--space-4);
+  }
+
+  .install-steps[data-count="4"] .install-step__picture {
+    max-width: 6.5rem;
+  }
+}
+
+.install-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.install-step__picture {
+  display: block;
+  width: 100%;
+  max-width: 10rem;
+  height: auto;
+}
+
+.install-step__number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  margin: var(--space-2) 0 var(--space-1);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #1b2430;
+  background: var(--color-today);
+  border-radius: 50%;
+}
+
+.install-step__text {
+  font-size: var(--font-size-sm);
+  line-height: 1.3;
+  overflow-wrap: break-word;
+}
+
+.install-dialog__note {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* The drawing (user units of the 100 × 125 picture); its common parts are in pictures.css. */
+.ip-wallpaper-top {
+  stop-color: var(--install-wallpaper-top);
+}
+
+.ip-wallpaper-bottom {
+  stop-color: var(--install-wallpaper-bottom);
+}
+
+.ip-app {
+  fill: #fff;
+  fill-opacity: 0.4;
+}
+
+.ip-app--dock {
+  fill-opacity: 0.25;
+}
+
+.ip-app--desk {
+  fill: var(--color-border);
+  fill-opacity: 1;
+}
+
+.ip-dockbar {
+  fill: var(--color-surface);
+  fill-opacity: 0.8;
+  stroke: var(--color-border);
+  stroke-width: 0.75;
+}
+
+.ip-app-label {
+  font-family: var(--font-family);
+  font-size: 6.5px;
+  font-weight: 600;
+  fill: #fff;
+}
+
+.ip-icon-bg {
+  fill: #dcebf8;
+}
+
+.ip-icon-cloud {
+  fill: #fff;
+  stroke: #24476f;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.ip-icon-facet {
+  fill: none;
+  stroke: #24476f;
+  stroke-width: 0.6;
+}

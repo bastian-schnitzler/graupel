@@ -87,10 +87,10 @@
   cursor: pointer;
 }
 
+/* Focus by its background only: the bar at the side belongs to the current values (REQ-727, DEC-145). */
 .history-list__item:focus {
   outline: none;
   background: var(--color-surface-muted);
-  box-shadow: inset 3px 0 0 var(--color-accent);
 }
 
 @media (hover: hover) {
@@ -99,20 +99,36 @@
   }
 }
 
+/*
+ * The entry shown (REQ-782, DEC-145): bold and a check at the end, in the accent colour; only this entry has the check,
+ * whichever it is. No bar at the side: that belongs to the current values (REQ-727).
+ */
 .history-list__item[aria-current="true"] {
   font-weight: 600;
   color: var(--color-accent);
 }
 
-/* The current values: date and time in gold with a gold bar at the side, marked or not (REQ-727). */
-.history-list__current,
-.history-list__current[aria-current="true"] {
+.history-list__check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-inline-start: auto;
+  padding-inline-start: var(--space-2);
+  box-sizing: content-box;
+}
+
+/*
+ * The current values: date and time in gold with a gold bar at the side, shown or not (REQ-727, while current
+ * REQ-757, DEC-145). Shown, they are bold with a gold check; while an earlier fetch is shown they keep the bar but stay
+ * in normal weight without the check (REQ-782).
+ */
+.history-list__current {
   color: var(--history-current);
   box-shadow: inset 3px 0 0 var(--history-current);
 }
 
-.history-list__current:focus {
-  box-shadow: inset 3px 0 0 var(--history-current);
+.history-list__current[aria-current="true"] {
+  color: var(--history-current);
 }
 
 .history-list__chevron {

@@ -30,6 +30,11 @@ export function focusableElements(container: HTMLElement): HTMLElement[] {
 export interface DialogProps {
   /** Heading of the dialog, also its accessible name. */
   title: ReactNode;
+  /**
+   * Shown in the heading row instead of the title, beside the close button (the tab bar of the info popup, REQ-814).
+   * The title is then only the accessible name (`aria-label`), so it must be a string. Not in a bare dialog.
+   */
+  heading?: ReactNode;
   /** Called on the close button, Escape and a click on the backdrop. */
   onClose: () => void;
   /** Element focused when the dialog opens; defaults to the first focusable element. */
@@ -73,6 +78,7 @@ export interface DialogProps {
  */
 export function Dialog({
   title,
+  heading,
   onClose,
   initialFocus,
   className,
@@ -176,7 +182,9 @@ export function Dialog({
       ref={ref}
       className={className ? `dialog ${className}` : "dialog"}
       data-testid={testId}
-      {...(bare ? { "aria-label": typeof title === "string" ? title : undefined } : { "aria-labelledby": titleId })}
+      {...(bare || heading != null
+        ? { "aria-label": typeof title === "string" ? title : undefined }
+        : { "aria-labelledby": titleId })}
       onCancel={(event) => {
         event.preventDefault();
         // Android's back button comes as `cancel` (REQ-716); Escape is handled on its key above.
@@ -195,7 +203,7 @@ export function Dialog({
                 <button
                   ref={closeRef}
                   type="button"
-                  className="icon-button dialog__close"
+                  className="icon-button close-button dialog__close"
                   aria-label={t("dialog.close")}
                   title={t("dialog.close")}
                   onClick={onClose}
@@ -209,15 +217,19 @@ export function Dialog({
         </div>
       ) : (
         <div className="dialog__box">
-          <div className="dialog__header">
-            <h2 className="dialog__title" id={titleId}>
-              {title}
-            </h2>
+          <div className={heading != null ? "dialog__header dialog__header--heading" : "dialog__header"}>
+            {heading != null ? (
+              <div className="dialog__heading">{heading}</div>
+            ) : (
+              <h2 className="dialog__title" id={titleId}>
+                {title}
+              </h2>
+            )}
             {tools ? <div className="dialog__header-tools">{tools}</div> : null}
             <button
               ref={closeRef}
               type="button"
-              className="icon-button dialog__close"
+              className="icon-button close-button dialog__close"
               aria-label={t("dialog.close")}
               onClick={onClose}
             >

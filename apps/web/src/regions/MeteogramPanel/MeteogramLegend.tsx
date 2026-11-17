@@ -722,7 +722,7 @@ export function MeteogramLegend({
       </h2>
       <button
         type="button"
-        className="icon-button meteogram-legend__close"
+        className="icon-button close-button meteogram-legend__close"
         aria-label={t("meteogram.legend.close")}
         title={t("meteogram.legend.close")}
         onClick={onClose}

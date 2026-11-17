@@ -12,10 +12,12 @@ import {
   modelHeadersChoice,
   readArchiveDays,
   readDewPoint,
+  readHideInstallButton,
   readHistorySlider,
   readLegend,
   readRelativeHumidity,
   readScaleToVisibleRange,
+  mergeFavorites,
   readSettingsFile,
   readStoredColorMode,
   readStoredFavorites,
@@ -25,6 +27,7 @@ import {
   setArchiveDays,
   setColorMode,
   setDewPoint,
+  setHideInstallButton,
   setHistorySlider,
   setLegend,
   setMapProvider,
@@ -58,9 +61,9 @@ export interface SettingsTransfer {
  * and the cloud chain card are shown, the map provider, the start place, the model headers, the day slider with its
  * days, the dew point option (REQ-593), the relative humidity option (REQ-650), whether the axes follow the zoom
  * (REQ-656), whether the meteogram shows its legend (REQ-639), the days the archive of the installed app keeps and
- * whether its history slider is shown on a phone (REQ-686) and the favourites as a JSON file and loads them back. A
- * refused file changes nothing and shows why in an error card (REQ-492). The buttons sit in the heading row (REQ-469),
- * the success message in the body.
+ * whether its history slider is shown on a phone (REQ-686), whether the website hides its install button (REQ-809)
+ * and the favourites as a JSON file and loads them back. On import the file's favourites are added to the current ones
+ * (REQ-817, `mergeFavorites`). A refused file changes nothing and shows why in an error card (REQ-492). The buttons sit in the heading row (REQ-469), the success message in the body.
  */
 export function useSettingsTransfer(): SettingsTransfer {
   const { setLanguage } = useI18n();
@@ -88,6 +91,7 @@ export function useSettingsTransfer(): SettingsTransfer {
         legend: readLegend(),
         archiveDays: readArchiveDays(),
         historySlider: readHistorySlider(),
+        hideInstallButton: readHideInstallButton(),
       },
       favorites: readStoredFavorites() ?? config.favorites.presets,
     });
@@ -109,7 +113,13 @@ export function useSettingsTransfer(): SettingsTransfer {
       return;
     }
     const { settings, favorites } = result.value;
-    if (favorites) replaceFavorites(favorites);
+    // The file's favourites are added to the current ones; none is removed or added twice (REQ-817).
+    if (favorites) {
+      const current = readStoredFavorites() ?? config.favorites.presets;
+      const merged = mergeFavorites(current, favorites);
+      // Nothing new: the list stays as it is (presets stay presets until the user changes them).
+      if (merged.length > current.length) replaceFavorites(merged);
+    }
     if (settings.language !== undefined) setLanguage(settings.language);
     if (settings.colorMode !== undefined) setColorMode(settings.colorMode);
     // A file from before REQ-503 has one switch for both cards; the separate switches of a newer file win.
@@ -127,6 +137,7 @@ export function useSettingsTransfer(): SettingsTransfer {
     if (settings.legend !== undefined) setLegend(settings.legend);
     if (settings.archiveDays !== undefined) setArchiveDays(settings.archiveDays);
     if (settings.historySlider !== undefined) setHistorySlider(settings.historySlider);
+    if (settings.hideInstallButton !== undefined) setHideInstallButton(settings.hideInstallButton);
     dismiss("settings.transfer");
     setStatus({ kind: "imported" });
   };

@@ -7,6 +7,7 @@ import type { AppMode } from "../../state/index.ts";
 import { ArchiveSettings } from "./ArchiveSettings.tsx";
 import { ColorModeSettings } from "./ColorModeSettings.tsx";
 import { DaySliderSettings } from "./DaySliderSettings.tsx";
+import { InstallButtonSettings } from "./InstallButtonSettings.tsx";
 import { MapProviderSettings } from "./MapProviderSettings.tsx";
 import { MeteogramSettings } from "./MeteogramSettings.tsx";
 import { ModelChainSettings } from "./ModelChainSettings.tsx";
@@ -52,10 +53,10 @@ export interface SettingsTab {
 }
 
 /**
- * Tabs of the settings popup with their sections, in display order (REQ-686): Design (colour mode, map), Start (start
- * place, day slider with the days shown), Models (weather and cloud chain, model headers), Meteogram (legend, axes when
- * zoomed, dew point, relative humidity) and, only in the installed app, Archive (days the history keeps; on a phone the
- * history slider). A later setting adds a section to its tab with its own component. The language is chosen in the
+ * Tabs of the settings popup with their sections, in display order (REQ-686): Design (colour mode, map and, on the
+ * website only, whether to hide the install button, REQ-809), Start (start place, day slider with the days shown),
+ * Models (weather and cloud chain, model headers), Meteogram (legend, axes when zoomed, dew point, relative humidity)
+ * and, only in the installed app, Archive (days the history keeps; on a phone the history slider). A later setting adds a section to its tab with its own component. The language is chosen in the
  * header only (REQ-468); export and import are buttons in the heading row (REQ-469).
  */
 export const SETTINGS_TABS: readonly SettingsTab[] = [
@@ -65,6 +66,12 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     sections: [
       { id: "colorMode", title: "settings.colorMode", Component: ColorModeSettings },
       { id: "map", title: "settings.map", Component: MapProviderSettings },
+      {
+        id: "installButton",
+        title: "settings.installButton",
+        Component: InstallButtonSettings,
+        available: ({ appMode }) => appMode === "website",
+      },
     ],
   },
   {

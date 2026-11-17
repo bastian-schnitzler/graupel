@@ -1,22 +1,46 @@
 /* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /*
- * Tab bar of the popups (info REQ-434, settings REQ-686). Never a scrollbar in the info popup (REQ-518): the bar does
- * not scroll, tabs that do not fit in one row wrap to a second one, and the underline of the selected tab sits on the
- * border instead of overlapping it (the 1 px overlap made the former scroll container show a vertical scrollbar).
+ * Tab bar of the popups (info REQ-434, settings REQ-686). The tabs always stay in one row (REQ-780), in every language
+ * and with each domain's imprint label. Where they do not fit, TabBar.tsx steps through the levels of `data-fit` below:
+ * first the spacing, then the font gets smaller, down to a lower bound (level 5); where even that does not fit, the bar
+ * scrolls sideways and the selected tab is scrolled into view. Never a visible scrollbar (REQ-518): the scrollbar is
+ * hidden, and the underline of the selected tab sits inside the bar, so nothing overflows downwards.
  */
 .tabs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0 var(--space-1);
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
   border-bottom: 1px solid var(--color-border);
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * A tab bar in a dialog's heading row (the info popup, REQ-814): the row's divider is its line, so the selected tab's
+ * underline sits on it. Its tabs make the row about as tall as a title row, at every level of fitting (fixed line
+ * height), so the popup's body does not move when the font gets smaller.
+ */
+.dialog__heading > .tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-bottom: 0;
+}
+
+.dialog__heading > .tabs > .tabs__tab {
+  padding-block: var(--space-3);
+  line-height: 1.5rem;
 }
 
 .tabs__tab {
   flex: none;
-  max-width: 100%;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
   padding: var(--space-2) var(--space-3);
   font: inherit;
   color: var(--color-text-muted);
@@ -24,6 +48,7 @@
   border: 0;
   border-bottom: 2px solid transparent;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 @media (hover: hover) {
@@ -38,8 +63,23 @@
   border-bottom-color: var(--color-accent);
 }
 
-.tabs__tab:focus-visible {
-  outline-offset: -2px;
+/*
+ * No frame around a tab (REQ-859, as the X of REQ-776): the selected tab shows only its underline, also when the popup
+ * opens and focuses it (Safari on the iPhone and the iPad takes that focus for one to show) and after a click or a tap;
+ * no focus ring (outline, box-shadow), no touch highlight. Only while the page is used with the keyboard
+ * (`data-keyboard` on <html>, keyboardInput.ts) the focused tab's label takes the accent colour, underlined thinly
+ * beneath its text: still no frame.
+ */
+.tabs__tab:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+:root[data-keyboard] .tabs__tab:focus-visible {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.25em;
 }
 
 /* A panel that styles its own display (the settings' sections) still hides while its tab is not selected. */
@@ -63,4 +103,38 @@
   .tabs__tab {
     padding-inline: var(--space-2);
   }
+}
+
+/*
+ * Levels of fitting (REQ-780), each a little tighter than the one before: 1 and 2 narrow the tabs' padding, 3 to 5 drop
+ * the gap and shrink the font. Level 5 is the lower bound: 13 px text, 8 px between two labels. The selectors outrank a
+ * dialog's own spacing (settings on a phone), and no level is wider than the one before.
+ */
+.tabs[data-fit="1"] > .tabs__tab {
+  padding-inline: var(--space-2);
+}
+
+.tabs[data-fit="2"] > .tabs__tab {
+  padding-inline: 0.375rem;
+}
+
+.tabs[data-fit="3"],
+.tabs[data-fit="4"],
+.tabs[data-fit="5"] {
+  gap: 0;
+}
+
+.tabs[data-fit="3"] > .tabs__tab {
+  padding-inline: 0.375rem;
+  font-size: 0.9375rem;
+}
+
+.tabs[data-fit="4"] > .tabs__tab {
+  padding-inline: 0.3125rem;
+  font-size: var(--font-size-sm);
+}
+
+.tabs[data-fit="5"] > .tabs__tab {
+  padding-inline: var(--space-1);
+  font-size: 0.8125rem;
 }

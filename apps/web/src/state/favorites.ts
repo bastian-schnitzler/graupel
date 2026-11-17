@@ -66,6 +66,21 @@ export function storeFavorites(favorites: readonly Favorite[]): void {
   }
 }
 
+/**
+ * The favourites after an import (REQ-817): the imported places are added to the current ones and none is removed.
+ * The current list keeps its order; each imported place that is not a favourite yet is appended in the file's order.
+ * A place counts as the same when `samePlace` says so, i.e. its coordinates rounded to four decimals (about 10 m)
+ * match, as for the star in the location picker. Such a place is not added twice; the current entry stays as it is,
+ * with its name.
+ */
+export function mergeFavorites(current: readonly Place[], imported: readonly Place[]): Favorite[] {
+  const result = current.map(toFavorite);
+  for (const place of imported) {
+    if (!result.some((item) => samePlace(item, place))) result.push(toFavorite(place));
+  }
+  return result;
+}
+
 /** Window event after `replaceFavorites`; its `detail` is the new list. */
 export const FAVORITES_REPLACED_EVENT = "graupel:favorites-replaced";
 

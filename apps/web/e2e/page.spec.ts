@@ -80,6 +80,7 @@ for (const { name, width, height } of [
     const footer = page.getByRole("navigation", { name: "Information" });
     for (const [link, tab] of [
       ["Info", "About"],
+      ["Help", "Help"],
       ["Legal notice", "Legal notice"],
       ["Privacy", "Privacy policy"],
     ] as const) {
@@ -94,7 +95,7 @@ for (const { name, width, height } of [
     await page.getByRole("combobox", { name: "Language" }).selectOption("de");
     await expect(page.locator("html")).toHaveAttribute("lang", "de");
     const footerDe = page.getByRole("navigation", { name: "Informationen" });
-    await expect(footerDe.getByRole("button")).toHaveText(["Info", "Impressum", "Datenschutz"]);
+    await expect(footerDe.getByRole("button")).toHaveText(["Info", "Hilfe", "Impressum", "Datenschutz"]);
     await expect(location.getByRole("combobox", { name: "Ort suchen" })).toHaveValue("Innsbruck");
 
     // Colour mode: system (light) by default, then dark, kept after a reload, back to the system.

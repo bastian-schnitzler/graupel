@@ -3,8 +3,8 @@
 import type { ImprintConfig } from "../config/index.ts";
 import type { MessageKey, Translate } from "../i18n/index.ts";
 
-/** Tabs of the info popup (REQ-434), in display order. */
-export const INFO_TABS = ["about", "imprint", "privacy"] as const;
+/** Tabs of the info popup (REQ-434), in display order; Help between Info and the imprint (REQ-819). */
+export const INFO_TABS = ["about", "help", "imprint", "privacy"] as const;
 
 export type InfoTab = (typeof INFO_TABS)[number];
 
@@ -18,6 +18,7 @@ export function isInfoTab(value: unknown): value is InfoTab {
  */
 export const INFO_TAB_LABELS: Readonly<Record<InfoTab, MessageKey>> = {
   about: "info.tab.about",
+  help: "info.tab.help",
   imprint: "info.tab.imprint",
   privacy: "privacy.title",
 };

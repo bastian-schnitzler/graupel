@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Bastian Schnitzler
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { readdirSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import { checkSite, collectFiles } from "./scripts/package-site.mjs";
 import { bundledPackage, checkShipped, thirdPartyNotice } from "./scripts/third-party.mjs";
 
 const appFile = (path: string) => fileURLToPath(new URL(path, import.meta.url));
@@ -37,6 +39,26 @@ function licensePlugin(): Plugin {
   };
 }
 
+/**
+ * Checks the written build (REQ-777, REQ-779): every icon, the manifest and the logo that index.html, the manifest and
+ * the bundle point to is in dist/, relative to the page and outside the folders a web server maps elsewhere (Apache's
+ * /icons/). Fails the build otherwise, so neither the e2e tests nor the release run on a site with broken icons.
+ */
+function siteCheckPlugin(): Plugin {
+  let outDir = "";
+  return {
+    name: "graupel-site-check",
+    apply: "build",
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir);
+    },
+    closeBundle() {
+      const problems = checkSite(collectFiles(outDir));
+      if (problems.length > 0) throw new Error(`site check of ${outDir} failed: ${problems.join("; ")}`);
+    },
+  };
+}
+
 /** Dev server: the third-party notice that the About tab loads into its popup (REQ-514), as the build writes it. */
 function licenseDevPlugin(): Plugin {
   return {
@@ -54,7 +76,7 @@ function licenseDevPlugin(): Plugin {
 // Relative Pfade: Die Seite läuft unter beliebigen Domains und Unterpfaden (GitHub Pages).
 export default defineConfig({
   base: "./",
-  plugins: [react(), licensePlugin(), licenseDevPlugin()],
+  plugins: [react(), licensePlugin(), siteCheckPlugin(), licenseDevPlugin()],
   server: { port: 5173 },
   // 4173 belegt die Demo des Meteogramm-Kerns, 4174 der Model Domain Viewer (playwright.config.ts).
   preview: { port: 4175, strictPort: true },

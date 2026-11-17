@@ -83,7 +83,7 @@ for (const scheme of ["light", "dark"] as const) {
         expect(await style(footer, "box-shadow")).toBe("none");
 
         const links = footer.getByRole("navigation").getByRole("button");
-        await expect(links).toHaveText(["Info", "Legal notice", "Privacy"]);
+        await expect(links).toHaveText(["Info", "Help", "Legal notice", "Privacy"]);
         const footerBox = await box(footer);
         const last = await box(links.last());
         const first = await box(links.first());

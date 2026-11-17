@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * One card of the model chain: model, hours of its slice, catalogue details in an
- * info popover (`ModelInfoButton`).
+ * info popover (`ModelInfoButton`). On a phone or a tablet the weather chain's cards have no info button while the
+ * model headers are shown: it stands there instead (REQ-820).
  */
 import type { WeatherModel } from "@graupel/download";
 import { useCallback } from "react";
@@ -11,7 +12,7 @@ import type { HourSpan } from "../../../state/chain.ts";
 import type { ChainKind, ChainShade } from "../../../state/chainColors.ts";
 import { usePhone } from "../../../state/phoneLandscape.ts";
 import { modelLabel } from "./chainUtils.ts";
-import { ModelInfoButton } from "./ModelInfo.tsx";
+import { ModelInfoButton, useModelInfoPlaces } from "./ModelInfo.tsx";
 import type { ModelChainSegment } from "./modelChainLayout.ts";
 
 export interface ModelSegmentProps {
@@ -46,6 +47,8 @@ export function ModelSegment({
 }: ModelSegmentProps) {
   const t = useT();
   const phone = usePhone();
+  // REQ-820: the weather chain's button only where `modelInfoPlaces` puts it; the cloud chain's always.
+  const infoInChain = useModelInfoPlaces().chain || kind !== "main";
   const { model } = segment;
   const label = modelLabel({ ...meta, ...model });
   const key = model.id ?? model.name;
@@ -75,14 +78,16 @@ export function ModelSegment({
     >
       <div className="model-card__top">
         <span className="model-card__name">{label}</span>
-        <ModelInfoButton
-          className="model-card__info"
-          meta={meta}
-          model={model}
-          open={open}
-          onToggle={toggle}
-          chain={kind}
-        />
+        {infoInChain && (
+          <ModelInfoButton
+            className="model-card__info"
+            meta={meta}
+            model={model}
+            open={open}
+            onToggle={toggle}
+            chain={kind}
+          />
+        )}
       </div>
       <div
         className="model-card__range"

@@ -483,12 +483,13 @@ test.describe("phone portrait, after loading", () => {
     test("where the page scrolls, the footer row ends 80 px above its end, for Safari's bottom bar (REQ-581, REQ-614)", async ({
       page,
     }) => {
-      // A page that scrolls: both model chains on a low screen (where it fits, see phone-height.spec.ts).
+      // A page that scrolls: both model chains on a low screen (where it fits, see phone-height.spec.ts). Since REQ-820
+      // the weather chain's cards have no info button beside the model headers and are lower: the screen is lower again.
       await page.addInitScript(() => {
         window.localStorage.setItem("graupel.showWeatherChain", "true");
         window.localStorage.setItem("graupel.showCloudChain", "true");
       });
-      await page.setViewportSize({ width: 375, height: 560 });
+      await page.setViewportSize({ width: 375, height: 500 });
       await page.goto(APP);
       await expect(chart(page)).toBeVisible();
       await expect(page.locator('[data-region="model-chain"] .model-chain-row')).toHaveCount(2);

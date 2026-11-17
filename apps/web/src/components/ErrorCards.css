@@ -83,11 +83,6 @@ body:has(.map-switch--tile) .error-cards {
   }
 }
 
-.error-card__close:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 1px;
-}
-
 .error-card__close svg {
   width: 1.125rem;
   height: 1.125rem;

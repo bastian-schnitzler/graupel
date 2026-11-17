@@ -10,7 +10,7 @@ export interface BeforeInstallPromptEvent extends Event {
 
 /**
  * How the page can be installed right now:
- * - `prompt`: the browser offered an install prompt (`beforeinstallprompt`, Chromium); the download button shows it.
+ * - `prompt`: the browser offered an install prompt (`beforeinstallprompt`, Chromium); the install dialog shows it.
  * - `manual`: the browser has no install prompt at all (Safari, Firefox); the download button shows instructions.
  * - `none`: a browser with install prompts that has not offered one (already installed, not installable, or the
  *   prompt was just used) or the app was installed (`appinstalled`); no download button.
@@ -43,7 +43,7 @@ export function createInstallPromptStore(win: InstallWindow): InstallPromptStore
   const notify = () => listeners.forEach((listener) => listener());
 
   const onPrompt = (event: Event) => {
-    // Keep the event and suppress the browser's own mini-infobar; the download button shows the prompt.
+    // Keep the event and suppress the browser's own mini-infobar; the install dialog's button shows the prompt.
     event.preventDefault();
     deferred = event as BeforeInstallPromptEvent;
     installed = false;
@@ -99,26 +99,4 @@ export const installPromptStore: InstallPromptStore =
 /** Current install availability; re-renders on `beforeinstallprompt`, `appinstalled` and after `install()`. */
 export function useInstallAvailability(store: InstallPromptStore = installPromptStore): InstallAvailability {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, () => "none");
-}
-
-/**
- * Platform whose install instructions the dialog shows when the browser has no install prompt. Each names only what
- * works on this device (REQ-658): `desktop` (Windows, Linux, ChromeOS: Chrome or Edge), `macosOther` (a Mac browser
- * other than Safari: Safari's Add to Dock, or Chrome or Edge).
- */
-export type InstallPlatform = "ios" | "android" | "macos" | "macosOther" | "desktop";
-
-/**
- * Platform from the user agent: iPhone/iPad in any browser (Safari, Chrome, Edge, Firefox; also the iPad with a
- * desktop user agent), Android, Safari on a Mac, another browser on a Mac, otherwise a desktop system (REQ-658).
- */
-export function installPlatform(nav: Pick<Navigator, "userAgent" | "maxTouchPoints">): InstallPlatform {
-  const ua = nav.userAgent;
-  if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && nav.maxTouchPoints > 1)) return "ios";
-  if (/Android/.test(ua)) return "android";
-  if (/Macintosh/.test(ua)) {
-    const safari = /Safari\//.test(ua) && !/Chrome|Chromium|CriOS|Edg|Firefox|FxiOS|OPR/.test(ua);
-    return safari ? "macos" : "macosOther";
-  }
-  return "desktop";
 }

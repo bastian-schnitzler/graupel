@@ -79,6 +79,28 @@ html.dialog-open--gutter {
   font-weight: 600;
 }
 
+/*
+ * A heading row with other content than the title (REQ-814: the info popup's tab bar beside the close button, no
+ * title): the content fills the row's height and sits on its divider; the close button stays where it is in every
+ * other dialog. The left padding plus a tab's own padding lines the first label up with the body's text.
+ */
+.dialog__header--heading {
+  align-items: stretch;
+  gap: var(--space-1);
+  padding-block: 0;
+  padding-left: var(--space-1);
+}
+
+.dialog__header--heading > .dialog__close {
+  align-self: center;
+}
+
+.dialog__heading {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 /* Icon buttons in the heading row, right-aligned before the close button (REQ-469). */
 .dialog__header-tools {
   display: flex;

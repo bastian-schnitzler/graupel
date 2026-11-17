@@ -68,8 +68,8 @@ for (const width of [375, 1280]) {
       // No language choice in the popup (REQ-468); export and import are icon buttons in the title row (REQ-469).
       await expect(dialog.getByRole("combobox", { name: "Language" })).toHaveCount(0);
       const title = await dialog.getByRole("heading", { name: "Settings" }).boundingBox();
-      const exportBox = await dialog.getByRole("button", { name: "Export settings" }).boundingBox();
-      const importBox = await dialog.getByRole("button", { name: "Import settings" }).boundingBox();
+      const exportBox = await dialog.getByRole("button", { name: "Export settings and favourites" }).boundingBox();
+      const importBox = await dialog.getByRole("button", { name: "Import settings and favourites" }).boundingBox();
       const closeBox = await dialog.getByRole("button", { name: "Close" }).boundingBox();
       expect(title && exportBox && importBox && closeBox).toBeTruthy();
       expect(title!.x + title!.width).toBeLessThanOrEqual(exportBox!.x);
@@ -78,7 +78,7 @@ for (const width of [375, 1280]) {
       for (const box of [exportBox!, importBox!]) {
         expect(Math.abs(box.y + box.height / 2 - (closeBox!.y + closeBox!.height / 2))).toBeLessThan(2);
       }
-      await expect(dialog.getByRole("button", { name: "Export settings" })).toHaveText("");
+      await expect(dialog.getByRole("button", { name: "Export settings and favourites" })).toHaveText("");
       await expectNoHorizontalScroll(page);
       const box = await dialog.boundingBox();
       expect(box && box.x >= 0 && box.x + box.width <= width).toBe(true);
@@ -102,6 +102,12 @@ for (const width of [375, 1280]) {
       await expect(dialog.getByRole("tab", { name: "About" })).toHaveAttribute("aria-selected", "true");
       await expect(dialog.getByRole("tab", { name: "About" })).toBeFocused();
 
+      // Four tabs since REQ-819: About, Help, Legal notice, Privacy policy.
+      await page.keyboard.press("ArrowRight");
+      const help = dialog.getByRole("tab", { name: "Help" });
+      await expect(help).toHaveAttribute("aria-selected", "true");
+      await expect(help).toBeFocused();
+      await expect(dialog.getByRole("tabpanel", { name: "Help" })).toBeVisible();
       await page.keyboard.press("ArrowRight");
       const imprint = dialog.getByRole("tab", { name: "Legal notice" });
       await expect(imprint).toHaveAttribute("aria-selected", "true");

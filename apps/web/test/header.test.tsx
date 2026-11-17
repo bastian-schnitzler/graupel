@@ -169,15 +169,16 @@ describe("settings popup", () => {
     expect(popup.hasAttribute("open")).toBe(true);
     const close = within(popup).getByRole("button", { name: "Close" });
     // The close button gets the focus; the first focusable is the export button in the title row. The tab bar follows
-    // (REQ-686) with the tab Design selected; the last focusable is the map choice at the end of that tab: its radio
-    // group as Tab reaches it, by the checked one.
-    const first = within(popup).getByRole("button", { name: "Export settings" });
+    // (REQ-686) with the tab Design selected; the last focusable is the choice whether to hide the install button at the
+    // end of that tab on the website (REQ-809): its radio group as Tab reaches it, by the checked one (No).
+    const first = within(popup).getByRole("button", { name: "Export settings and favourites" });
     const tabs = within(popup).getByRole("tablist", { name: "Settings sections" });
     expect(within(tabs).getByRole("tab", { name: "Design" }).getAttribute("aria-selected")).toBe("true");
-    const map = within(popup).getByRole("radiogroup", { name: "Map" });
-    const last = within(map)
+    const installButton = within(popup).getByRole("radiogroup", { name: "Hide the “Install” button" });
+    const last = within(installButton)
       .getAllByRole("radio")
       .find((radio) => (radio as HTMLInputElement).checked)!;
+    expect(last.parentElement?.textContent).toBe("No");
     expect(last).toBeTruthy();
     expect(document.activeElement).toBe(close);
     last.focus();
@@ -227,13 +228,14 @@ describe("settings popup", () => {
     expect(items[0]?.textContent).toBe("Settings");
     expect(items[2]?.getAttribute("aria-label")).toBe("Close");
     const tools = within(items[1] as HTMLElement).getAllByRole("button");
-    expect(tools.map((tool) => tool.getAttribute("aria-label"))).toEqual(["Export settings", "Import settings"]);
+    expect(tools.map((tool) => tool.getAttribute("aria-label"))).toEqual(["Export settings and favourites", "Import settings and favourites"]);
     for (const tool of tools) {
       expect(tool.textContent).toBe("");
       expect(tool.querySelector("svg")).toBeTruthy();
       expect(tool.getAttribute("title")).toMatch(/^(Export|Import) settings/);
     }
-    expect(tools[1]?.getAttribute("title")).toContain("the current favourites are replaced");
+    // The import adds the favourites (REQ-817).
+    expect(tools[1]?.getAttribute("title")).toContain("its favourites are added to the current ones");
     // The old section with its text and text buttons is gone.
     expect(within(dialog()).queryByRole("heading", { name: "Export and import" })).toBeNull();
     expect(within(dialog()).queryByRole("button", { name: "Export" })).toBeNull();
@@ -277,7 +279,7 @@ describe("info popup", () => {
       within(dialog())
         .getAllByRole("tab")
         .map((t) => t.textContent),
-    ).toEqual(["About", "Legal notice", "Privacy policy"]);
+    ).toEqual(["About", "Help", "Legal notice", "Privacy policy"]);
     expect(selected().textContent).toBe("About");
     expect(document.activeElement).toBe(selected());
     expect(within(panel()).getByRole("img", { name: "Graupel logo" })).toBeTruthy();
@@ -306,6 +308,9 @@ describe("info popup", () => {
     setup();
     fireEvent.click(button("Info"));
     key(selected(), "ArrowRight");
+    // REQ-819: Help between About and the imprint.
+    expect(selected().textContent).toBe("Help");
+    key(selected(), "ArrowRight");
     expect(selected().textContent).toBe("Legal notice");
     expect(document.activeElement).toBe(selected());
     // REQ-484: no heading repeats the tab; the tab names the panel.
@@ -326,7 +331,7 @@ describe("info popup", () => {
       within(dialog())
         .getAllByRole("tab")
         .map((t) => t.tabIndex),
-    ).toEqual([0, -1, -1]);
+    ).toEqual([0, -1, -1, -1]);
     fireEvent.click(tab("Privacy policy"));
     expect(selected().textContent).toBe("Privacy policy");
   });
@@ -384,15 +389,42 @@ describe("info popup", () => {
   it("keeps Tab inside the popup and out of hidden panels", () => {
     setup();
     fireEvent.click(button("Info"));
-    const close = within(dialog()).getByRole("button", { name: "Close" });
+    // The heading row holds the tab bar and then the close button (REQ-814): the selected tab comes first.
+    const first = selected();
     // The last focusable element is the last link of the About panel.
     const links = within(panel()).getAllByRole("link");
     const last = links[links.length - 1]!;
     last.focus();
     key(last, "Tab");
-    expect(document.activeElement).toBe(close);
-    key(close, "Tab", { shiftKey: true });
+    expect(document.activeElement).toBe(first);
+    key(first, "Tab", { shiftKey: true });
     expect(document.activeElement).toBe(last);
+  });
+
+  // REQ-814: no title "Information" any more; the heading row holds only the tabs and the close button, and the
+  // dialog keeps "Information" as its accessible name. In German the first tab is "Info" (REQ-814).
+  it.each(LANGUAGES)("has no visible title, only the tabs and the close button, named by aria-label in %s (REQ-814)", (language) => {
+    storeLanguage(language);
+    render(<App />);
+    const tr = (k: Parameters<typeof translate>[1]) => translate(language, k);
+    fireEvent.click(within(screen.getByRole("banner")).getByRole("button", { name: tr("header.info") }));
+    const info = screen.getByRole("dialog", { name: tr("info.title") });
+    expect(info.getAttribute("aria-label")).toBe(tr("info.title"));
+    expect(info.hasAttribute("aria-labelledby")).toBe(false);
+    expect(within(info).queryByRole("heading", { level: 2 })).toBeNull();
+    const head = info.querySelector(".dialog__header")!;
+    expect([...head.querySelectorAll("button")]).toEqual([
+      ...within(info).getAllByRole("tab"),
+      within(info).getByRole("button", { name: tr("dialog.close") }),
+    ]);
+    expect(within(head as HTMLElement).getByRole("tablist", { name: tr("info.tabs") })).toBeTruthy();
+    // Only the tabs' labels in the heading row: no title text beside them.
+    expect(head.textContent).toBe(INFO_TABS.map((id) => tr(INFO_TAB_LABELS[id])).join(""));
+  });
+
+  it("names the first tab “Info” in German (REQ-814)", () => {
+    expect(translate("de", "info.tab.about")).toBe("Info");
+    expect(translate("de", "info.title")).toBe("Information");
   });
 });
 
@@ -431,11 +463,13 @@ describe("texts", () => {
     for (const id of INFO_TABS) {
       const label = tr(INFO_TAB_LABELS[id]);
       fireEvent.click(within(dialog()).getByRole("tab", { name: label }));
-      // REQ-484: the tab label names the panel; imprint and privacy policy repeat it in no heading.
+      // REQ-484: the tab label names the panel; imprint and privacy policy repeat it in no heading. The help has a
+      // heading per section (REQ-819).
       const panel = within(dialog()).getByRole("tabpanel", { name: label });
-      if (id !== "about") expect(within(panel).queryByRole("heading", { level: 3 })).toBeNull();
+      if (id !== "about" && id !== "help") expect(within(panel).queryByRole("heading", { level: 3 })).toBeNull();
       const text = panel.textContent;
       if (id === "about") expect(text).toContain(tr("info.about.description"));
+      else if (id === "help") expect(text).toContain(tr("info.help.meteogram.text"));
       else if (id === "privacy") expect(text).toContain(tr("privacy.intro"));
       else expect(text).toContain(tr("info.imprint.operator"));
     }

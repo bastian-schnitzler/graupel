@@ -6,10 +6,15 @@
  * and sun times.
  *
  * Every request goes through the global `fetch` (or an injected one), is
- * limited to a number of parallel requests, retried on 500–504 and network
- * errors with exponential backoff, and can be aborted with an `AbortSignal`.
+ * limited to a number of parallel requests, retried on 500–504, timeouts and
+ * network errors with exponential backoff, and can be aborted with an
+ * `AbortSignal`. Each attempt may take `timeoutMs` (default 10 s, REQ-863):
+ * with the default two retries a hanging request gives up after 31.5 s.
  * Single Runs requests are never retried: an outage of that API must not hold
  * up the forecast (REQ-633). All time series are requested with `timezone=GMT`.
+ *
+ * `totalTimeoutMs` (default 60 s) is not used by the client itself: it is the
+ * default limit of a whole `downloadChain` with this client (REQ-863).
  */
 
 import { createMemoryCache, type ForecastCache } from "./cache";
@@ -23,6 +28,11 @@ export const DEFAULT_META_URL = "https://api.open-meteo.com/data";
 
 export const RETRYABLE_STATUS_CODES: ReadonlySet<number> = new Set([500, 502, 503, 504]);
 
+/** Default timeout of a single attempt in milliseconds (REQ-863, DEC-181). */
+export const DEFAULT_TIMEOUT_MS = 10_000;
+/** Default limit of a whole `downloadChain` in milliseconds (REQ-863, DEC-181). */
+export const DEFAULT_TOTAL_TIMEOUT_MS = 60_000;
+
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 export interface ClientOptions {
@@ -33,8 +43,19 @@ export interface ClientOptions {
   metaUrl?: string;
   /** Commercial API key, sent as `apikey` with forecast and Single Runs requests. */
   apiKey?: string;
-  /** Timeout of a single attempt in milliseconds (default 60 000). */
+  /**
+   * Timeout of a single attempt in milliseconds (default 10 000, REQ-863); 0 or
+   * Infinity switches it off. A timeout counts like a network error: it is retried.
+   */
   timeoutMs?: number;
+  /**
+   * Default limit of a whole `downloadChain` with this client in milliseconds
+   * (default 60 000, REQ-863), counted from the call over every step; 0 or
+   * Infinity switches it off. `DownloadChainRequest.totalTimeoutMs` overrides it
+   * per download. When it is reached, `downloadChain` aborts its requests and
+   * rejects with {@link DownloadTimeoutError}.
+   */
+  totalTimeoutMs?: number;
   /**
    * Retries after the first attempt on 500–504 and network errors (default 2).
    * Forecast and `meta.json` requests only; Single Runs requests are never
@@ -173,6 +194,21 @@ export class AllModelsFailedError extends Error {
     );
     this.name = "AllModelsFailedError";
     this.errors = errors;
+  }
+}
+
+/**
+ * A `downloadChain` did not finish within its total limit (`totalTimeoutMs`,
+ * REQ-863); its requests were aborted and nothing was cached.
+ */
+export class DownloadTimeoutError extends Error {
+  /** The limit that was reached, in milliseconds. */
+  readonly timeoutMs: number;
+
+  constructor(timeoutMs: number) {
+    super(`Download did not finish within ${timeoutMs} ms`);
+    this.name = "DownloadTimeoutError";
+    this.timeoutMs = timeoutMs;
   }
 }
 
@@ -466,6 +502,11 @@ export interface OpenMeteoClient {
   /** Cache of `downloadChain` results, or null. */
   readonly cache: ForecastCache<ForecastResult> | null;
   /**
+   * Default limit of a `downloadChain` with this client in milliseconds
+   * (`ClientOptions.totalTimeoutMs`, default 60 000; 0 or Infinity: none, REQ-863).
+   */
+  readonly totalTimeoutMs: number;
+  /**
    * GET a JSON document with retries (`maxRetries`), timeout, parallelism limit and `nan`
    * repair. Throws {@link ApiError} (or {@link OutOfDomainError}) when it fails
    * for good; an aborted signal rejects with the signal's reason.
@@ -502,7 +543,8 @@ export function createClient(options: ClientOptions = {}): OpenMeteoClient {
   const singleRunsUrl = options.singleRunsUrl ?? DEFAULT_SINGLE_RUNS_URL;
   const metaUrl = (options.metaUrl ?? DEFAULT_META_URL).replace(/\/+$/, "");
   const apiKey = options.apiKey || undefined;
-  const timeoutMs = options.timeoutMs ?? 60_000;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const totalTimeoutMs = options.totalTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS;
   const maxRetries = Math.max(0, Math.floor(options.maxRetries ?? 2));
   const retryBackoffMs = Math.max(0, options.retryBackoffMs ?? 500);
   const limiter = new Limiter(Math.max(1, Math.floor(options.concurrency ?? 4)));
@@ -593,6 +635,7 @@ export function createClient(options: ClientOptions = {}): OpenMeteoClient {
     singleRunsUrl,
     metaUrl,
     cache,
+    totalTimeoutMs,
 
     getJson(url, params = {}, requestOptions = {}) {
       return request(url, params, requestOptions.signal);

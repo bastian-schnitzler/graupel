@@ -15,7 +15,7 @@
  *     "map": "maptoolkit",
  *     "startLocation": "gps", "modelHeaders": false, "daySlider": false, "days": 3,
  *     "dewPoint": "on", "relativeHumidity": "on", "scaleToVisibleRange": false, "legend": false,
- *     "archiveDays": 90, "historySlider": true
+ *     "archiveDays": 90, "historySlider": true, "hideInstallButton": true
  *   },
  *   "favorites": [
  *     { "name": "Matterhorn", "lat": 45.9763, "lon": 7.6586, "elevation": 4478 },
@@ -40,14 +40,17 @@
  * `false` (REQ-639; a file without it leaves the option as it is, default `true`); `settings.archiveDays` how many days
  * the installed app keeps its archived fetches, `"unlimited"`, `365`, `90`, `14` or `5` (REQ-686; a file without it
  * leaves the choice as it is, default `"unlimited"`); `settings.historySlider` whether the installed app on a phone
- * shows the history slider, `true` or `false` (REQ-686; a file without it leaves the choice as it is, default `false`).
+ * shows the history slider, `true` or `false` (REQ-686; a file without it leaves the choice as it is, default `false`);
+ * `settings.hideInstallButton` whether the website hides its install button, `true` or `false` (REQ-809; a file without
+ * it leaves the choice as it is, default `false`).
  * All but `language` and `colorMode` were added later with the same
  * version, so older files may lack them. A favourite with `"mapPoint": true` is a point picked on the map that can be renamed
  * (REQ-489, added with the same version); its `name` is empty until it is renamed (REQ-536, shown by its coordinates;
  * older files may carry the generic map-point name of a language, read as empty).
- * `favorites` replaces the list on import (a place listed twice is kept once). What the file leaves out stays
- * unchanged on import. A new setting adds an optional field to `settings` (same version); the version only rises
- * when older files can no longer be read as before.
+ * On import `favorites` are added to the current favourites (REQ-817, `mergeFavorites`): none is removed, a place
+ * that is already a favourite is not added again (a place listed twice in the file is kept once). What the file
+ * leaves out stays unchanged on import. A new setting adds an optional field to `settings` (same version); the
+ * version only rises when older files can no longer be read as before.
  */
 import type { MapProvider, StartLocation } from "../config/index.ts";
 import { isLanguage, type Language } from "../i18n/index.ts";
@@ -104,12 +107,14 @@ export interface SettingsData {
   archiveDays?: ArchiveDays;
   /** Whether the installed app on a phone shows the history slider (REQ-686). */
   historySlider?: boolean;
+  /** Whether the website hides its install button (REQ-809). */
+  hideInstallButton?: boolean;
 }
 
 /** Contents of a settings file after the check. */
 export interface SettingsFile {
   settings: SettingsData;
-  /** Favourites; left out: unchanged. */
+  /** Favourites, added to the current ones on import (REQ-817); left out: unchanged. */
   favorites?: Favorite[];
 }
 
@@ -203,6 +208,11 @@ function parseSettings(value: unknown): SettingsData | null {
     const { historySlider } = value;
     if (typeof historySlider !== "boolean") return null;
     settings.historySlider = historySlider;
+  }
+  if ("hideInstallButton" in value) {
+    const { hideInstallButton } = value;
+    if (typeof hideInstallButton !== "boolean") return null;
+    settings.hideInstallButton = hideInstallButton;
   }
   // Unknown settings (e.g. from a later release with the same version) are skipped.
   return settings;

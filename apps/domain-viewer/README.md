@@ -13,10 +13,10 @@ maplibre-gl-leaflet, Grundkarte von OpenFreeMap (DEC-009, DEC-010).
 | `src/lib.js` | Daten ohne DOM: Modelle und Zonen aufbereiten, Ringe normalisieren (Antimeridian, Pol), Treffertests, Region am Punkt |
 | `src/schema.js` | Prüfung der Dateien aus `model-data/` |
 | `sw.js` | Service Worker: Kacheln, Schriften und Sprites von OpenFreeMap 90 Tage im Cache |
-| `scripts/` | `prebuild.mjs` (Daten nach `public/data/` kopieren und prüfen), `build.mjs` (`dist/`), `vendor.mjs` (Liste der Bibliotheken in `dist/vendor/`), `third-party.mjs` (`THIRD_PARTY_LICENSES.md`), `serve.mjs` (statischer Server) |
+| `scripts/` | `prebuild.mjs` (Daten nach `public/data/` kopieren und prüfen), `build.mjs` (`dist/`), `vendor.mjs` (Liste der Bibliotheken in `dist/vendor/`), `third-party.mjs` (`THIRD_PARTY_LICENSES.md`), `serve.mjs` (statischer Server, optional unter einem Unterpfad) |
 | `test/` | Vitest: Schema, Normalisierung, Gruppen, Zonen und Regionen gegen `resolver_cases.json`, Lizenzen |
 | `LICENSE`, `LICENSES/`, `THIRD_PARTY_LICENSES.md` | Lizenztexte und Hinweise (siehe „Lizenz“) |
-| `e2e/` | Playwright-Smoke-Test ohne Netz (im Wurzelverzeichnis `pnpm test:e2e`) |
+| `e2e/` | Playwright ohne Netz (im Wurzelverzeichnis `pnpm test:e2e`): Smoke-Test, Auslieferung unter dem Unterpfad `/graupel/` |
 
 ## Daten
 
@@ -57,3 +57,16 @@ pnpm --filter @graupel/domain-viewer licenses # THIRD_PARTY_LICENSES.md neu schr
 ```
 
 `dist/` braucht einen http(s)-Server; von der Platte (`file://`) lädt der Browser weder ES-Module noch die Daten.
+
+## GitHub Pages
+
+Öffentlich läuft der Viewer unter https://bastian-schnitzler.github.io/graupel/ (REQ-822). Der Workflow
+`.github/workflows/pages.yml` des öffentlichen Repos baut ihn bei jedem Push auf `main` (und von Hand) und lädt
+`apps/domain-viewer/dist` auf GitHub Pages hoch. Weil die Seite dort unter dem Unterpfad `/graupel/` liegt, sind alle
+ihre Pfade relativ (Daten, `vendor/`, Skripte, Lizenzdateien); der Service Worker registriert sich als `sw.js` und hat
+damit den Scope `/graupel/`. Lokal unter dem Unterpfad ansehen:
+
+```sh
+pnpm --filter @graupel/domain-viewer build
+BASE=/graupel/ pnpm --filter @graupel/domain-viewer serve   # http://localhost:4174/graupel/
+```

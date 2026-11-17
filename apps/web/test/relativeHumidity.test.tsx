@@ -371,7 +371,7 @@ describe("settings file with the relative humidity (REQ-650)", () => {
       within(popup.getByRole("radiogroup", { name: "Relative humidity" })).getByRole("radio", { name });
 
     const exportSettings = async (popup: ReturnType<typeof within>, blobs: Blob[]) => {
-      fireEvent.click(popup.getByRole("button", { name: "Export settings" }));
+      fireEvent.click(popup.getByRole("button", { name: "Export settings and favourites" }));
       const parsed = parseSettingsFile(await blobs[blobs.length - 1]!.text());
       if (!parsed.ok) throw new Error(parsed.error);
       return parsed.value.settings;
@@ -384,7 +384,7 @@ describe("settings file with the relative humidity (REQ-650)", () => {
         });
       });
       await waitFor(() =>
-        expect(popup.getByRole("status").textContent).toBe("Settings and favourites imported."),
+        expect(popup.getByRole("status").textContent).toBe("Settings imported; the file's favourites were added to the current ones."),
       );
     };
 

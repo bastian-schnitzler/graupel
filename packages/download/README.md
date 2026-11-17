@@ -13,15 +13,20 @@ Node ≥ 20. Zunächst nicht auf npm veröffentlicht.
   `validateTimestampSequence` (`TimelineIntegrityError` bei nicht streng steigenden Zeitstempeln) u. a. Zeitstempel
   ohne Versatz gelten als UTC, sofern keine IANA-Zeitzone angegeben ist.
 - Open-Meteo-Client: `createClient({ fetch?, forecastUrl?, singleRunsUrl?, metaUrl?, apiKey?, timeoutMs?,
-  maxRetries?, retryBackoffMs?, concurrency?, cache? })` mit `fetchForecast` (immer `timezone=GMT`), `fetchModelMeta` und
+  totalTimeoutMs?, maxRetries?, retryBackoffMs?, concurrency?, cache? })` mit `fetchForecast` (immer `timezone=GMT`),
+  `fetchModelMeta` und
   `fetchEnsembleMeta` (`meta.json`, `{}` bei Mischmodellen und 404), `fetchSingleRun` (Single-Runs-API) und
-  `fetchSunPhases` (Sonnenauf- und -untergang ab vorgestern, UTC). Standard ist das globale `fetch`; jede Anfrage
-  hat eine Zeitgrenze, wird bei 500–504, Netzfehlern und Zeitüberschreitung mit exponentiellem Backoff wiederholt
-  (`maxRetries`; Anfragen an die Single-Runs-API nie, REQ-633), lässt sich per `AbortSignal` abbrechen und zählt zur
-  Parallelitätsgrenze (Standard 4). `fetchSingleRun` meldet einen Ausfall (5xx, Netzfehler, Zeitüberschreitung) über
-  `onUnavailable`, bevor eine wartende Anfrage startet. Unquotiertes `nan` wird
+  `fetchSunPhases` (Sonnenauf- und -untergang ab vorgestern, UTC). Standard ist das globale `fetch`; jeder Versuch
+  einer Anfrage hat eine Zeitgrenze (`timeoutMs`, Standard 10 s = `DEFAULT_TIMEOUT_MS`, REQ-863; 0 schaltet ab), jede
+  Anfrage wird bei 500–504, Netzfehlern und Zeitüberschreitung mit exponentiellem Backoff wiederholt (`maxRetries`,
+  Standard 2, `retryBackoffMs` Standard 500: eine hängende Anfrage gibt nach 31,5 s auf; Anfragen an die
+  Single-Runs-API nie, REQ-633), lässt sich per `AbortSignal` abbrechen und zählt zur Parallelitätsgrenze
+  (Standard 4); eine abgebrochene Anfrage gibt ihren Platz frei, eine wartende startet dann nicht mehr. 429 wird nie
+  wiederholt. `totalTimeoutMs` (Standard 60 s = `DEFAULT_TOTAL_TIMEOUT_MS`, lesbar als `client.totalTimeoutMs`) ist die
+  Gesamtgrenze jedes `downloadChain` mit diesem Client (siehe unten). `fetchSingleRun` meldet einen Ausfall (5xx,
+  Netzfehler, Zeitüberschreitung) über `onUnavailable`, bevor eine wartende Anfrage startet. Unquotiertes `nan` wird
   zu `null`. Fehler: `ApiError` (`status`, `reason`, `url`), `OutOfDomainError` („No data is available …“),
-  `AllModelsFailedError`. Dazu `toOpenMeteoModel`, `canonicalModelId`, `modelMetaPath`, `ensembleMetaPath`
+  `AllModelsFailedError`, `DownloadTimeoutError` (`timeoutMs`). Dazu `toOpenMeteoModel`, `canonicalModelId`, `modelMetaPath`, `ensembleMetaPath`
   (Pfade aus dem Katalog haben Vorrang vor den eingebauten Tabellen).
 - Größen und Harmonisierung: Registry (`quantities.json`) und Katalog (`model_catalogue.json`) aus
   `@graupel/model-data` übergibt der Aufrufer (geparstes JSON oder nur die Listen). `createQuantityRegistry`,
@@ -32,7 +37,8 @@ Node ≥ 20. Zunächst nicht auf npm veröffentlicht.
   UTC-Zeitstempeln, meldet Lücken und Längenfehler über `onWarning` und füllt nichts auf. `fetchModelDatasets` lädt
   die Größen eines Modells und wiederholt eine abgelehnte Anfrage einmal ohne die `retry_without`-Größen (Schnee).
 - Ketten zusammensetzen: `downloadChain(client, { location, chain | auto, cloudChain?, quantities?, now?,
-  timezone?, runSegments?, refresh?, signal?, onWarning? }, { catalogue, registry, domains?, regions? })` lädt die
+  timezone?, runSegments?, refresh?, totalTimeoutMs?, signal?, onWarning? }, { catalogue, registry, domains?,
+  regions? })` lädt die
   Hauptkette und die Wolkenkette und gibt ein `ForecastResult` zurück: `timeline { start, now, end }` (gestern 00:00
   in `timezone`, volle Stunde, Kettenende), `chain`/`cloudChain` (zusammengesetzte Ketten mit `sliceEndHours`,
   `runSegments`, Form wie `MeteogramChainModel`), `combined`, `byModel`, `cloud`, `cloudByModel`,
@@ -43,7 +49,16 @@ Node ≥ 20. Zunächst nicht auf npm veröffentlicht.
   dem ersten Modell); ein Abschnitt endet, wo der neueste Lauf endet (`meta.json` und Daten), in der Hauptkette nach
   der letzten Stunde mit Temperatur (`SLICE_END_QUANTITY`; ohne Temperatur zählen alle Hauptgrößen), Lücken bleiben null
   und werden nie aus einem anderen Modell aufgefüllt; ein fehlerhaftes Modell leert nur seinen Abschnitt, schlagen
-  alle fehl, kommt `AllModelsFailedError`. Antwortet ein Modell der Hauptkette ohne aktuelle Daten (kein Wert ab
+  alle fehl (Anfrage oder Harmonisierung), kommt `AllModelsFailedError`, und zwar sofort (REQ-863): Sonnenzeiten,
+  Hauptkette und Wolken starten parallel, gewartet wird zuerst auf die Hauptkette; ist sie ganz gescheitert, bricht
+  `downloadChain` die übrigen Anfragen des Abrufs (Sonnenzeiten, Wolken, wartende Anfragen) ab, ohne auf sie zu
+  warten. Liefert mindestens ein Modell, werden Sonnenzeiten und Wolken abgewartet, ihr Scheitern ist nur eine
+  Warnung. Gesamtgrenze (REQ-863): `totalTimeoutMs` des Abrufs, sonst `client.totalTimeoutMs` (Standard 60 s;
+  0 oder `Infinity` schaltet ab), zählt ab dem Aufruf über alle Schritte (Modelle, Ersatzmodelle, Laufsuche,
+  Ensemble-Infos); ein Treffer im Cache kommt sofort. Ist sie erreicht, bricht `downloadChain` alle laufenden
+  Anfragen des Abrufs ab und rejected mit `DownloadTimeoutError` (`name`, `timeoutMs`, Meldung mit der Grenze), ohne
+  Teilergebnis und ohne Eintrag im Cache. Jeder Abruf hat dafür einen eigenen `AbortController`, der dem `signal`
+  des Aufrufers folgt; bricht der Aufrufer ab, rejected `downloadChain` mit dem Grund seines Signals. Antwortet ein Modell der Hauptkette ohne aktuelle Daten (kein Wert ab
   jetzt, z. B. ein eingestelltes Modell), während ein anderes Modell der Kette aktuelle Daten hat, übernimmt ein
   feines Modell mit aktuellen Daten seinen Abschnitt bis zum eigenen Datenende (REQ-767, mit `domains` und
   `regions`): zuerst aus der Wolkenkette der Region am Ort, höchstens 2,5 km gröber als das ausgefallene Modell, sonst

@@ -4,8 +4,9 @@
  * Info button in the meteogram's model header (REQ-643): while the weather chain is hidden, each model header has a
  * small info button right of the model's name that opens the same info popover as the chain card's; a model split
  * into runs has it only in its widest part, and where it does not fit beside the name there is none. On the desktop
- * and on a phone, in the card and on the whole screen; it follows the day selection and sideways scrolling. With the
- * weather chain shown there are no buttons in the meteogram, and the copied picture has none.
+ * and on a phone, in the card and on the whole screen; it follows the day selection and sideways scrolling. On the
+ * desktop with the weather chain shown there are no buttons in the meteogram; on a phone they stay there and the
+ * chain's cards have none (REQ-820, model-info-place.spec.ts). The copied picture has none.
  *
  * The fake Open-Meteo names a run 6 hours old that ends 24 hours ahead in every model's `meta.json`; the Single Runs
  * API answers the older run with data, so every model reaching further is split into runs (as model-header-runs).
@@ -274,9 +275,22 @@ test.describe("phone", () => {
     await expectButtonsInWidestParts(meteogram(page));
   });
 
-  test("chain shown: no info buttons in the meteogram", async ({ page }) => {
+  test("chain shown: the info buttons stay in the headers, the chain's cards have none (REQ-820)", async ({ page }) => {
     await open(page, true);
-    await expect(page.getByTestId("model-header-info-button")).toHaveCount(0);
+    const chain = page.locator('[data-region="model-chain"]').getByRole("group", { name: "Weather chain" });
+    await expect(chain.locator(".model-card").first()).toBeVisible();
+    await expect(chain.getByRole("button", { name: /^Details for / })).toHaveCount(0);
+    await expectButtonsInWidestParts(meteogram(page));
+    await expectPopover(page, infoButtons(meteogram(page)).first(), true);
+  });
+
+  test("turned with the chain shown: the info buttons in the full-screen view's headers (REQ-820)", async ({ page }) => {
+    await open(page, true);
+    await page.setViewportSize({ width: 844, height: 390 });
+    const dialog = fullscreen(page);
+    await expect(dialog.locator('svg[data-render-mode="fullscreen"]')).toBeVisible();
+    await expectButtonsInWidestParts(dialog);
+    await expectPopover(page, infoButtons(dialog).first(), true);
   });
 
   test("on the whole screen in landscape as well", async ({ page }) => {

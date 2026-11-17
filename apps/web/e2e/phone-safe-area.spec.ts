@@ -206,8 +206,9 @@ test("in landscape menu, popups, map and the model info keep clear of the camera
   await map.getByRole("button", { name: "Cancel" }).tap();
   await expect(map).toHaveCount(0);
 
-  // The info popover of the chain's last card, shifted to stay on screen, stops at the camera.
-  const info = page.locator('[data-region="model-chain"]').getByRole("button", { name: /^Details for / }).last();
+  // The model info of the last model, shifted to stay on screen, stops at the camera. With the model headers shown its
+  // button stands in the meteogram's last model header, the chain's cards have none on a phone (REQ-820).
+  const info = page.locator('[data-region="meteogram"]').getByTestId("model-header-info-button").last();
   await info.tap();
   const popover = page.getByTestId("model-info-popover");
   await expect(popover).toBeVisible();
@@ -330,14 +331,16 @@ test.describe("portrait", () => {
     }
     expect(covered.footerBottom).toBeCloseTo(plain.footerBottom, 0);
 
-    // Where the page scrolls (model chains on a low screen) the bar's room, 80 px as before.
+    // Where the page scrolls (model chains on a low screen) the bar's room, 80 px as before. Since REQ-820 the weather
+    // chain's cards have no info button beside the model headers and are lower: the screen is lower than before.
     await showChain(page);
     await page.addInitScript(() => window.localStorage.setItem("graupel.showCloudChain", "true"));
-    await page.setViewportSize({ width: 390, height: 560 });
+    await page.setViewportSize({ width: 390, height: 500 });
     await page.reload();
     await expect(chart(page)).toBeVisible();
     await setInsets(page, { bottom: HOME_INDICATOR });
     const scrolling = await settled(page);
+    expect(scrolling.scrollHeight).toBeGreaterThan(scrolling.screen);
     expect(scrolling).toMatchObject({ top: "0px", bottom: "0px", room: "80px" });
   });
 });

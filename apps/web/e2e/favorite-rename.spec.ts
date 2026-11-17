@@ -5,9 +5,10 @@
  * the map, mark it, rename it with the pencil in the favourites menu; the new name is shown for the place and stays
  * after a reload. A point without own name is shown by its coordinates, in the search field and in the meteogram's
  * footer before the elevation, re-formatted with the language (REQ-536). There is no network: OpenTopoMap tiles are a
- * transparent pixel.
+ * transparent pixel. The desktop renames in the menu's row; a phone and a tablet in a popup (REQ-862,
+ * favorite-rename-popup.spec.ts), so the rename in the row with the keyboard is the desktop's.
  */
-import { expect, test, type Page } from "./fixtures.ts";
+import { expect, onlyIn, test, type Page } from "./fixtures.ts";
 import { chooseLanguage } from "./headerControls.ts";
 
 const APP = "http://localhost:4175/";
@@ -109,7 +110,15 @@ const POINT = "47.1718° N · 12.6806° E";
 test.describe("with own stored favourites", () => {
   test.use({ storedFavorites: false });
 
-  test("the rename works with the keyboard; Escape cancels", async ({ page }) => {
+  test.describe("in the menu's row", () => {
+    onlyIn("desktop", "the rename in the menu's row is the desktop's; phone and tablet rename in a popup (REQ-862)");
+
+    test("the rename works with the keyboard; Escape cancels", async ({ page }) => {
+      await renameWithKeyboard(page);
+    });
+  });
+
+  async function renameWithKeyboard(page: Page) {
     await page.addInitScript(() => {
       if (!localStorage.getItem("graupel.favorites")) {
         localStorage.setItem(
@@ -141,7 +150,7 @@ test.describe("with own stored favourites", () => {
     await expect(menu.getByRole("menuitem", { name: "Alm", exact: true })).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(region(page).getByRole("combobox")).toHaveValue("Alm");
-  });
+  }
 
   test("over the pencil only its own row is highlighted, not the entry before (REQ-508)", async ({ page }) => {
     await page.addInitScript(() => {
@@ -224,9 +233,10 @@ test.describe("with own stored favourites", () => {
     const menuDe = page.getByRole("menu", { name: "Favoriten" });
     await expect(menuDe.getByRole("menuitem", { name: "46,9263° N · 10,9261° O", exact: true })).toBeVisible();
 
-    // Renamed, only the alias is shown.
+    // Renamed, only the alias is shown: in the menu's row on the desktop, in a popup on a phone and a tablet (REQ-862).
     await menuDe.getByRole("menuitem", { name: "46,9263° N · 10,9261° O umbenennen" }).click();
-    const field = menuDe.getByRole("textbox", { name: "Name des Favoriten" });
+    const field = (lineBelow ? menuDe : page.getByRole("dialog", { name: "46,9263° N · 10,9261° O umbenennen?" }))
+      .getByRole("textbox", { name: "Name des Favoriten" });
     await field.fill("Rettenbachferner");
     await field.press("Enter");
     await expect(combobox).toHaveValue("Rettenbachferner");

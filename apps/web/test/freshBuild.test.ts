@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Bastian Schnitzler
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
- * The website is built from fresh packages (REQ-718, REQ-721): `pnpm package` (and the preview build) build the
+ * The website is built from fresh packages (REQ-718, REQ-721): `pnpm package` builds the
  * workspace packages first (scripts/fresh-build.mjs) and stop when a dist/ is older than its sources, so the site
  * no longer bundles an old core (run with month, unit twice). Only a build given a commit carries it (REQ-724).
  */
@@ -104,7 +104,7 @@ describe("fresh build of the website (REQ-718, REQ-721)", () => {
     expect(staleDist(join(REPO_DIR, "model-data"))).toBeNull();
   });
 
-  it("gives only the preview build the commit (REQ-724)", () => {
+  it("gives the commit only to a build that names one (REQ-724)", () => {
     const envs: Record<string, string | undefined>[] = [];
     const record = (args: readonly string[], env: Record<string, string | undefined>) => {
       if (args === SITE_BUILD) envs.push(env);

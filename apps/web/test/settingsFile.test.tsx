@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfigProvider, DEFAULT_CONFIG, type GraupelConfig, type Place } from "../src/config/index.ts";
 import { NoticesProvider } from "../src/components/ErrorCards.tsx";
 import { DialogsProvider } from "../src/dialogs/index.ts";
-import { I18nProvider, LANGUAGE_STORAGE_KEY, storeLanguage, translate } from "../src/i18n/index.ts";
+import { I18nProvider, LANGUAGE_STORAGE_KEY, LANGUAGES, storeLanguage, translate, type Language } from "../src/i18n/index.ts";
 import { Header } from "../src/regions/Header/index.ts";
 import { LocationPicker } from "../src/regions/LocationPicker/index.ts";
 import {
@@ -17,12 +17,14 @@ import {
   modelHeadersChoice,
   readArchiveDays,
   readDewPoint,
+  readHideInstallButton,
   readHistorySlider,
   readLegend,
   readRelativeHumidity,
   readScaleToVisibleRange,
   setArchiveDays,
   setDewPoint,
+  setHideInstallButton,
   setHistorySlider,
   setLegend,
   setScaleToVisibleRange,
@@ -34,6 +36,7 @@ import {
   SETTINGS_FILE_VERSION,
   parseSettingsFile,
   initColorMode,
+  mergeFavorites,
   readSettingsFile,
   readStoredColorMode,
   readStoredFavorites,
@@ -165,6 +168,19 @@ describe("settings file", () => {
     }
   });
 
+  it("reads whether the install button is hidden; older files without it leave it out (REQ-809)", () => {
+    for (const hideInstallButton of [true, false]) {
+      expect(parseSettingsFile(file({ settings: { hideInstallButton } }))).toEqual({
+        ok: true,
+        value: { settings: { hideInstallButton } },
+      });
+    }
+    expect(parseSettingsFile(file({ settings: { legend: true } }))).toEqual({ ok: true, value: { settings: { legend: true } } });
+    for (const hideInstallButton of ["true", null, 1]) {
+      expect(parseSettingsFile(file({ settings: { hideInstallButton } }))).toEqual({ ok: false, error: "content" });
+    }
+  });
+
   it("leaves out what the file does not contain and skips unknown settings", () => {
     expect(parseSettingsFile(file({}))).toEqual({ ok: true, value: { settings: {} } });
     expect(parseSettingsFile(file({ settings: { units: "imperial" }, favorites: [] }))).toEqual({
@@ -283,6 +299,7 @@ describe("export and import in the settings popup", () => {
     setLegend(false);
     setArchiveDays(90);
     setHistorySlider(true);
+    setHideInstallButton(true);
     weatherChainChoice.set(true);
     cloudChainChoice.set(false);
     setMapProvider("maptoolkit");
@@ -293,7 +310,7 @@ describe("export and import in the settings popup", () => {
     storeFavorites([MATTERHORN, INNSBRUCK]);
     setup();
     openSettings("Einstellungen");
-    fireEvent.click(within(popup()).getByRole("button", { name: "Einstellungen exportieren" }));
+    fireEvent.click(within(popup()).getByRole("button", { name: "Einstellungen und Favoriten exportieren" }));
     expect(downloads.names).toEqual([settingsFileName()]);
     expect(downloads.blobs[0]?.type).toBe("application/json");
     const exported = await downloads.blobs[0]!.text();
@@ -316,6 +333,8 @@ describe("export and import in the settings popup", () => {
           legend: false,
           archiveDays: 90,
           historySlider: true,
+          // REQ-809
+          hideInstallButton: true,
         },
         favorites: [MATTERHORN, INNSBRUCK],
       },
@@ -339,6 +358,7 @@ describe("export and import in the settings popup", () => {
       setLegend(true);
       setArchiveDays("unlimited");
       setHistorySlider(false);
+      setHideInstallButton(false);
     });
     act(() => storeFavorites([BRUSSELS]));
     await chooseFile(exported);
@@ -380,15 +400,25 @@ describe("export and import in the settings popup", () => {
     expect(readArchiveDays()).toBe(90);
     expect(readHistorySlider()).toBe(true);
     expect(within(popup()).queryByRole("tab", { name: "Archiv" })).toBeNull();
-    expect(readStoredFavorites()).toEqual([MATTERHORN, INNSBRUCK]);
-    expect(favoriteNames()).toEqual([expect.stringContaining("Matterhorn"), expect.stringContaining("Innsbruck")]);
+    // Hiding the install button (REQ-809), in the tab Design.
+    expect(readHideInstallButton()).toBe(true);
+    tab("Design");
+    const installButton = within(popup()).getByRole("radiogroup", { name: "Knopf „Installieren“ ausblenden" });
+    expect(within(installButton).getByRole("radio", { name: "Ja" })).toHaveProperty("checked", true);
+    // The file's favourites are added to the current one (REQ-817).
+    expect(readStoredFavorites()).toEqual([BRUSSELS, MATTERHORN, INNSBRUCK]);
+    expect(favoriteNames()).toEqual([
+      expect.stringContaining("Brussels"),
+      expect.stringContaining("Matterhorn"),
+      expect.stringContaining("Innsbruck"),
+    ]);
   });
 
   it("exports the presets while no own favourites are stored", async () => {
     const downloads = captureDownloads();
     setup();
     openSettings();
-    fireEvent.click(within(popup()).getByRole("button", { name: "Export settings" }));
+    fireEvent.click(within(popup()).getByRole("button", { name: "Export settings and favourites" }));
     expect(parseSettingsFile(await downloads.blobs[0]!.text())).toEqual({
       ok: true,
       value: {
@@ -412,24 +442,67 @@ describe("export and import in the settings popup", () => {
           // The archive keeps every fetch, the history slider is hidden without a choice (REQ-686).
           archiveDays: "unlimited",
           historySlider: false,
+          // The install button is shown without a choice (REQ-809).
+          hideInstallButton: false,
         },
         favorites: PRESETS,
       },
     });
   });
 
-  it("replaces the favourites shown in the location picker", async () => {
+  // REQ-817: the presets shown stay; the file's favourites come after them.
+  it("adds the file's favourites to those shown in the location picker (REQ-817)", async () => {
     setup();
     expect(favoriteNames()).toEqual([expect.stringContaining("Matterhorn")]);
     openSettings();
     await chooseFile(file({ favorites: [INNSBRUCK, BRUSSELS] }));
-    await waitFor(() => expect(favoriteNames()).toHaveLength(2));
-    expect(favoriteNames()).toEqual([expect.stringContaining("Innsbruck"), expect.stringContaining("Brussels")]);
+    await waitFor(() => expect(favoriteNames()).toHaveLength(3));
+    expect(favoriteNames()).toEqual([
+      expect.stringContaining("Matterhorn"),
+      expect.stringContaining("Innsbruck"),
+      expect.stringContaining("Brussels"),
+    ]);
+    expect(readStoredFavorites()).toEqual([MATTERHORN, INNSBRUCK, BRUSSELS]);
     // A file without settings leaves the language and the colour mode alone.
     expect(window.localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBeNull();
     expect(window.localStorage.getItem(COLOR_MODE_STORAGE_KEY)).toBeNull();
     expect(window.localStorage.getItem(MAP_PROVIDER_STORAGE_KEY)).toBeNull();
-    expect(within(popup()).getByRole("status").textContent).toBe("Settings and favourites imported.");
+    expect(within(popup()).getByRole("status").textContent).toBe("Settings imported; the file's favourites were added to the current ones.");
+  });
+
+  // REQ-817
+  it("keeps every current favourite, adds new places in the file's order and none twice; a second import adds nothing (REQ-817)", async () => {
+    const hill = { name: "Hausberg", lat: 47.1718, lon: 12.6806, mapPoint: true as const };
+    storeFavorites([MATTERHORN, INNSBRUCK]);
+    setup();
+    openSettings();
+    // The Matterhorn under another name and a few metres off: the same place after rounding, not added again.
+    const content = file({ favorites: [BRUSSELS, { name: "Cervino", lat: 45.97634, lon: 7.65858 }, hill] });
+    await chooseFile(content);
+    await waitFor(() => expect(favoriteNames()).toHaveLength(4));
+    const expected = [MATTERHORN, INNSBRUCK, BRUSSELS, hill];
+    expect(readStoredFavorites()).toEqual(expected);
+    expect(favoriteNames()).toEqual([
+      expect.stringContaining("Matterhorn"),
+      expect.stringContaining("Innsbruck"),
+      expect.stringContaining("Brussels"),
+      expect.stringContaining("Hausberg"),
+    ]);
+    expect(within(popup()).getByRole("status").textContent).toBe(translate("en", "settings.transfer.imported"));
+
+    await chooseFile(content);
+    await waitFor(() => expect(within(popup()).getByRole("status").textContent).not.toBe(""));
+    expect(readStoredFavorites()).toEqual(expected);
+    expect(favoriteNames()).toHaveLength(4);
+  });
+
+  it("leaves the presets unstored when the file brings no new place (REQ-817)", async () => {
+    setup();
+    openSettings();
+    await chooseFile(file({ settings: { colorMode: "dark" }, favorites: [MATTERHORN] }));
+    await waitFor(() => expect(readStoredColorMode()).toBe("dark"));
+    expect(window.localStorage.getItem(FAVORITES_STORAGE_KEY)).toBeNull();
+    expect(favoriteNames()).toEqual([expect.stringContaining("Matterhorn")]);
   });
 
   it("exports a renamed map-point favourite and imports it with its name (REQ-489)", async () => {
@@ -438,7 +511,7 @@ describe("export and import in the settings popup", () => {
     storeFavorites([MATTERHORN, hill]);
     setup();
     openSettings();
-    fireEvent.click(within(popup()).getByRole("button", { name: "Export settings" }));
+    fireEvent.click(within(popup()).getByRole("button", { name: "Export settings and favourites" }));
     const exported = await downloads.blobs[0]!.text();
     expect(JSON.parse(exported).favorites).toEqual([MATTERHORN, hill]);
 
@@ -496,4 +569,103 @@ describe("export and import in the settings popup", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+});
+
+describe("favourites of an import (REQ-817)", () => {
+  const hill = { name: "Hausberg", lat: 47.1718, lon: 12.6806, mapPoint: true as const };
+
+  it("appends new places after the current ones, in the file's order", () => {
+    expect(mergeFavorites([MATTERHORN], [INNSBRUCK, BRUSSELS])).toEqual([MATTERHORN, INNSBRUCK, BRUSSELS]);
+    expect(mergeFavorites([], [INNSBRUCK, hill])).toEqual([INNSBRUCK, hill]);
+  });
+
+  it("keeps every current favourite and its order when the file has others or none", () => {
+    expect(mergeFavorites([INNSBRUCK, MATTERHORN, hill], [BRUSSELS])).toEqual([INNSBRUCK, MATTERHORN, hill, BRUSSELS]);
+    expect(mergeFavorites([INNSBRUCK, MATTERHORN], [])).toEqual([INNSBRUCK, MATTERHORN]);
+  });
+
+  it("does not add a place twice: same coordinates rounded to four decimals; the current entry keeps its name", () => {
+    const cervino = { name: "Cervino", lat: 45.97634, lon: 7.65858 };
+    expect(mergeFavorites([MATTERHORN, hill], [cervino, { ...hill, name: "" }, BRUSSELS])).toEqual([
+      MATTERHORN,
+      hill,
+      BRUSSELS,
+    ]);
+    // About 10 m further is another place.
+    const nextDoor = { name: "Hörnli", lat: 45.9764, lon: 7.6586 };
+    expect(mergeFavorites([MATTERHORN], [nextDoor])).toEqual([MATTERHORN, nextDoor]);
+    // A place listed twice in the file comes once.
+    expect(mergeFavorites([], [BRUSSELS, { ...BRUSSELS, name: "Bruxelles" }])).toEqual([BRUSSELS]);
+  });
+
+  it("changes neither list", () => {
+    const current = [MATTERHORN];
+    const imported = [INNSBRUCK];
+    mergeFavorites(current, imported);
+    expect(current).toEqual([MATTERHORN]);
+    expect(imported).toEqual([INNSBRUCK]);
+  });
+});
+
+describe("tooltips of export and import (REQ-817, REQ-818)", () => {
+  const EXPORT: Readonly<Record<Language, string>> = {
+    de: "Einstellungen und Favoriten exportieren",
+    en: "Export settings and favourites",
+    fr: "Exporter les paramètres et les favoris",
+    it: "Esporta impostazioni e preferiti",
+    nl: "Instellingen en favorieten exporteren",
+    da: "Eksportér indstillinger og favoritter",
+    cs: "Exportovat nastavení a oblíbená místa",
+    sl: "Izvozi nastavitve in priljubljene kraje",
+  };
+  /** Words of the import hint that say the favourites are added, not replaced. */
+  const ADDED: Readonly<Record<Language, RegExp>> = {
+    de: /kommen zu den vorhandenen dazu, keiner wird gelöscht oder doppelt angelegt/,
+    en: /added to the current ones, none is removed or added twice/,
+    fr: /s'ajoutent aux favoris actuels, aucun n'est supprimé ni ajouté deux fois/,
+    it: /si aggiungono a quelli attuali, nessuno viene eliminato o aggiunto due volte/,
+    nl: /aan de huidige toegevoegd, geen enkele wordt verwijderd of dubbel toegevoegd/,
+    da: /føjes til de nuværende, ingen slettes eller tilføjes to gange/,
+    cs: /přidají ke stávajícím, žádné se nesmaže ani nepřidá dvakrát/,
+    sl: /dodajo k obstoječim, noben se ne izbriše ali doda dvakrat/,
+  };
+  /** Words of the success message that say the file's favourites were added. */
+  const IMPORTED: Readonly<Record<Language, RegExp>> = {
+    de: /Favoriten der Datei wurden zu den vorhandenen hinzugefügt/,
+    en: /file's favourites were added to the current ones/,
+    fr: /favoris du fichier ont été ajoutés aux favoris actuels/,
+    it: /preferiti del file sono stati aggiunti a quelli attuali/,
+    nl: /favorieten uit het bestand zijn aan de huidige toegevoegd/,
+    da: /filens favoritter er føjet til de nuværende/,
+    cs: /oblíbená místa ze souboru byla přidána ke stávajícím/,
+    sl: /priljubljeni kraji iz datoteke so dodani k obstoječim/,
+  };
+  const config: GraupelConfig = { ...DEFAULT_CONFIG, favorites: { enabled: true, presets: [] } };
+
+  it.each(LANGUAGES)("names the favourites in the export and says the import adds them in %s", (language) => {
+    storeLanguage(language);
+    render(
+      <ConfigProvider config={config}>
+        <I18nProvider languages={config.languages} browserLanguages={["en"]}>
+          <NoticesProvider>
+            <DialogsProvider>
+              <LocationProvider>
+                <Header />
+              </LocationProvider>
+            </DialogsProvider>
+          </NoticesProvider>
+        </I18nProvider>
+      </ConfigProvider>,
+    );
+    const tr = (key: Parameters<typeof translate>[1]) => translate(language, key);
+    fireEvent.click(screen.getByRole("button", { name: tr("header.settings") }));
+    const popup = screen.getByRole("dialog");
+    const exportButton = within(popup).getByRole("button", { name: EXPORT[language] });
+    expect(exportButton.getAttribute("title")).toBe(EXPORT[language]);
+    const importButton = within(popup).getByRole("button", { name: tr("settings.transfer.import") });
+    expect(importButton.getAttribute("title")).toBe(`${tr("settings.transfer.import")}. ${tr("settings.transfer.importHint")}`);
+    expect(importButton.getAttribute("title")).toMatch(ADDED[language]);
+    // The success message says so too.
+    expect(tr("settings.transfer.imported")).toMatch(IMPORTED[language]);
+  });
 });

@@ -13,6 +13,8 @@ export interface Call {
   /** Open-Meteo model of forecast and Single Runs requests, data path of `meta.json`. */
   model: string;
   hourly: string[];
+  /** Signal of the fetch call (REQ-863: aborted requests). */
+  signal?: AbortSignal;
 }
 
 /** What a handler answers: a JSON body, a Response, or an Error (network failure). */
@@ -83,8 +85,8 @@ export function fakeOpenMeteo(handlers: FakeHandlers = {}): FakeApi {
   const calls: Call[] = [];
   const fetch: FetchLike = (input, init) => {
     // Like the real fetch: an abort rejects a pending request with the signal's reason.
-    const signal = init?.signal;
-    const answer = respond(input);
+    const signal = init?.signal ?? undefined;
+    const answer = respond(input, signal);
     if (!signal) return answer;
     if (signal.aborted) return Promise.reject(signal.reason);
     return new Promise<Response>((resolve, reject) => {
@@ -92,7 +94,7 @@ export function fakeOpenMeteo(handlers: FakeHandlers = {}): FakeApi {
       answer.then(resolve, reject);
     });
   };
-  const respond = async (input: string): Promise<Response> => {
+  const respond = async (input: string, signal?: AbortSignal): Promise<Response> => {
     const url = new URL(input);
     const params = Object.fromEntries(url.searchParams.entries());
     const hourly = params.hourly ? params.hourly.split(",") : [];
@@ -108,7 +110,7 @@ export function fakeOpenMeteo(handlers: FakeHandlers = {}): FakeApi {
     } else {
       throw new Error(`unexpected URL ${input}`);
     }
-    const call: Call = { kind, url: input, params, model, hourly };
+    const call: Call = { kind, url: input, params, model, hourly, signal };
     calls.push(call);
 
     let reply: Reply;

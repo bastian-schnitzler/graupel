@@ -14,15 +14,24 @@ export {
 } from "./appMode.ts";
 export {
   createInstallPromptStore,
-  installPlatform,
   installPromptStore,
   useInstallAvailability,
   type BeforeInstallPromptEvent,
   type InstallAvailability,
   type InstallOutcome,
-  type InstallPlatform,
   type InstallPromptStore,
 } from "./install.ts";
+export {
+  installGuide,
+  type InstallBrowserName,
+  type InstallDevice,
+  type InstallGuide,
+  type InstallGuideId,
+  type InstallHint,
+  type InstallNote,
+  type InstallPicture,
+  type InstallSteps,
+} from "./installGuide.ts";
 export {
   COLOR_MODES,
   COLOR_MODE_STORAGE_KEY,
@@ -65,6 +74,12 @@ export {
   readHistorySlider,
   setHistorySlider,
   useHistorySlider,
+  DEFAULT_HIDE_INSTALL_BUTTON,
+  HIDE_INSTALL_BUTTON_STORAGE_KEY,
+  hideInstallButtonChoice,
+  readHideInstallButton,
+  setHideInstallButton,
+  useHideInstallButton,
   DAYS_STORAGE_KEY,
   DAY_SLIDER_STORAGE_KEY,
   DEFAULT_DEW_POINT,
@@ -127,6 +142,7 @@ export {
   FAVORITES_STORAGE_KEY,
   favoriteName,
   isMapPointFavorite,
+  mergeFavorites,
   readStoredFavorites,
   replaceFavorites,
   storeFavorites,
@@ -244,10 +260,14 @@ export {
 } from "./phoneLandscape.ts";
 export { MAP_DIALOG_OPEN_CLASS, isMapDialogOpen } from "./mapDialog.ts";
 export { readSideInsets, type SideInsets } from "./safeArea.ts";
+export { KEYBOARD_ATTRIBUTE, initKeyboardInput, isKeyboardUse } from "./keyboardInput.ts";
 export { DIALOG_GUTTER_CLASS, DIALOG_OPEN_CLASS, isPageScrollLocked, lockPageScroll } from "./scrollLock.ts";
 export {
   ForecastOverride,
   ForecastProvider,
+  LOAD_TIMEOUT_MS,
+  OVERLOAD_GRACE_MS,
+  REQUEST_TIMEOUT_MS,
   createForecastLoader,
   useForecast,
   type ForecastLoader,
@@ -259,6 +279,7 @@ export {
 export {
   FORECAST_FAILURES,
   FORECAST_FAILURE_DETAIL,
+  ForecastTimeoutError,
   forecastFailure,
   modelFailure,
   type ForecastFailure,

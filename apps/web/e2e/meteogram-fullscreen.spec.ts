@@ -892,22 +892,24 @@ test.describe("phone, portrait and landscape", () => {
   });
 
   test("a small phone in landscape shows the whole chart without scroll bars", async ({ page }) => {
-    // With the model chains shown, so the page in portrait scrolls (the chart takes the height left, REQ-608).
+    // With the model chains shown, so the page in portrait scrolls (the chart takes the height left, REQ-608). Since
+    // REQ-820 the weather chain's cards have no info button beside the model headers and are lower: 500 px instead of
+    // the 568 px of the iPhone SE, so the page still scrolls.
     await page.addInitScript(() => {
       window.localStorage.setItem("graupel.showWeatherChain", "true");
       window.localStorage.setItem("graupel.showCloudChain", "true");
     });
-    await page.setViewportSize({ width: 320, height: 568 });
+    await page.setViewportSize({ width: 320, height: 500 });
     await page.goto(APP);
     await expect(embedded(page)).toBeVisible();
     await page.evaluate(() => window.scrollTo(0, 200));
     expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
-    await turn(page, { width: 568, height: 320 });
+    await turn(page, { width: 500, height: 320 });
     await expect(fullscreen(page)).toBeVisible();
     await expect(fullscreen(page).locator('svg[data-render-mode="fullscreen"]')).toBeVisible();
     await expectNoScrollbars(page);
     // Turned back, the page scrolls again and is where it was.
-    await turn(page, { width: 320, height: 568 });
+    await turn(page, { width: 320, height: 500 });
     await expect(fullscreen(page)).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
   });

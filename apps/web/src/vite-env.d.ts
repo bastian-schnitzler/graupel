@@ -3,6 +3,6 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** Commit of a preview build, shown after the version in the Info tab (REQ-724); unset on the domain builds. */
+  /** Commit of the build, shown after the version in the Info tab when set (REQ-724); release builds leave it unset. */
   readonly VITE_GRAUPEL_REVISION?: string;
 }

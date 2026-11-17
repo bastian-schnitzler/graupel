@@ -1,0 +1,94 @@
+/* SPDX-FileCopyrightText: 2026 Bastian Schnitzler */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Drawn pictures of the popups: the install steps (REQ-775, InstallPicture.tsx) and the help (REQ-819,
+ * HelpPicture.tsx). Inline SVG in the page's colours, so they follow the light and dark design; what a step or a text
+ * points at is highlighted in the app's orange. Sizes are user units of each picture.
+ */
+.ip-screen {
+  fill: var(--color-bg);
+}
+
+.ip-frame {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 1.5;
+}
+
+.ip-bar {
+  fill: var(--color-surface-muted);
+}
+
+.ip-desk {
+  fill: var(--color-surface-muted);
+}
+
+.ip-field,
+.ip-menu {
+  fill: var(--color-surface);
+  stroke: var(--color-border);
+  stroke-width: 0.75;
+}
+
+.ip-line {
+  fill: var(--color-border);
+}
+
+.ip-accent {
+  fill: var(--color-accent);
+  fill-opacity: 0.45;
+}
+
+.ip-chart {
+  fill: var(--color-surface);
+}
+
+.ip-pressed {
+  fill: var(--color-border);
+}
+
+.ip-dim {
+  fill: #000;
+  fill-opacity: 0.3;
+}
+
+.ip-glyph {
+  fill: none;
+  stroke: var(--color-text);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ip-dot {
+  fill: var(--color-text);
+}
+
+.ip-label {
+  font-family: var(--font-family);
+  fill: var(--color-text);
+}
+
+.ip-label--strong {
+  font-weight: 700;
+}
+
+.ip-hit {
+  fill: var(--color-today);
+  fill-opacity: 0.2;
+  stroke: var(--color-today);
+  stroke-width: 1.6;
+}
+
+/* A second way, smaller (REQ-808): the compact bar's "…" in its inset. */
+.ip-hit--second {
+  fill-opacity: 0.12;
+  stroke-width: 1.1;
+  stroke-dasharray: 2 1.4;
+}
+
+.ip-inset {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 0.75;
+}

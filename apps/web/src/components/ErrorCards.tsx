@@ -31,7 +31,7 @@ export function ErrorCards({ store }: { store: NoticeStore }) {
           </div>
           <button
             type="button"
-            className="error-card__close"
+            className="close-button error-card__close"
             aria-label={closeLabel}
             title={closeLabel}
             onClick={() => store.dismiss(notice.id)}

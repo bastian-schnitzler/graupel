@@ -227,36 +227,6 @@ function measure(root: HTMLElement): ClosePlacement {
   return { where: "corner", left: round(origin.width - MAX_SIZE_PX - 8), top: 8, size: MAX_SIZE_PX, color: null };
 }
 
-/**
- * Whether the last input was a key (true) or a pointer or touch (false), for the button's focus hint (REQ-762): a ring
- * only where the keyboard is in use. The browser's `:focus-visible` alone is not enough: Safari on an iPad matches it
- * when the view opened by a tap focuses the button, and draws the blue ring there. Kept from the page's start, so the
- * button focused by a view opened with a key shows it at once; the mounted buttons follow each change
- * (`data-keyboard`).
- */
-let keyboardInput = false;
-const hinted = new Set<HTMLElement>();
-/** Keys pressed alone that are no keyboard use, as for the browser's own `:focus-visible`. */
-const MODIFIER_KEYS = new Set(["Alt", "AltGraph", "Control", "Meta", "Shift", "CapsLock"]);
-
-function setKeyboardInput(keyboard: boolean) {
-  keyboardInput = keyboard;
-  for (const button of hinted) button.toggleAttribute("data-keyboard", keyboard);
-}
-
-if (typeof document !== "undefined") {
-  document.addEventListener(
-    "keydown",
-    (event) => {
-      if (!event.metaKey && !event.ctrlKey && !event.altKey && !MODIFIER_KEYS.has(event.key)) setKeyboardInput(true);
-    },
-    true,
-  );
-  for (const type of ["pointerdown", "mousedown", "touchstart"]) {
-    document.addEventListener(type, () => setKeyboardInput(false), { capture: true, passive: true });
-  }
-}
-
 /** Presses on the button stay there: no cursor line by a tap, no zoom reset by a double tap, no full screen asked. */
 const stop = (event: SyntheticEvent) => event.stopPropagation();
 
@@ -274,17 +244,6 @@ export function FullscreenClose({ buttonRef, onClose }: FullscreenCloseProps) {
   const t = useT();
   const itemRef = useRef<HTMLDivElement | null>(null);
   const [placement, setPlacement] = useState<ClosePlacement | null>(null);
-
-  useLayoutEffect(() => {
-    // The focus hint follows the last input (REQ-762), from before the view opened on.
-    const button = itemRef.current?.querySelector("button");
-    if (!button) return;
-    button.toggleAttribute("data-keyboard", keyboardInput);
-    hinted.add(button);
-    return () => {
-      hinted.delete(button);
-    };
-  }, []);
 
   useLayoutEffect(() => {
     // The button's parent is the container (its own ref is set only after this effect ran).
@@ -348,7 +307,8 @@ export function FullscreenClose({ buttonRef, onClose }: FullscreenCloseProps) {
       <button
         ref={buttonRef}
         type="button"
-        className="icon-button fullscreen-close__button"
+        // No frame around the X, only a ring of its own after a key (REQ-762, REQ-776: the shared `close-button`).
+        className="icon-button close-button fullscreen-close__button"
         aria-label={t("dialog.close")}
         title={t("dialog.close")}
         onClick={onClose}

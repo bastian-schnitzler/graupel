@@ -6,9 +6,12 @@
  * `beforeinstallprompt` event.
  */
 import { expect, test, type Page, ownDevice, onlyIn } from "./fixtures.ts";
+import { headerControl } from "./headerControls.ts";
 import { fakeForecast } from "./openMeteo.ts";
 
 const APP = "http://localhost:4175/";
+/** Fixed time: Wednesday, 28 October 2026, 11:00 UTC. */
+const FIXED_NOW = Date.UTC(2026, 9, 28, 11);
 
 test.use({ locale: "en-GB" });
 
@@ -61,10 +64,10 @@ test("links a web app manifest", async ({ page }) => {
   });
   // REQ-516: app icons for "any" and "maskable" (Android), each on the light blue background.
   expect(manifest.icons.map((icon: { src: string; purpose: string }) => [icon.src, icon.purpose])).toEqual([
-    ["icons/icon-192.png", "any"],
-    ["icons/icon-512.png", "any"],
-    ["icons/icon-192-maskable.png", "maskable"],
-    ["icons/icon-512-maskable.png", "maskable"],
+    ["app-icons/icon-192.png", "any"],
+    ["app-icons/icon-512.png", "any"],
+    ["app-icons/icon-192-maskable.png", "maskable"],
+    ["app-icons/icon-512-maskable.png", "maskable"],
   ]);
   for (const icon of manifest.icons as { src: string }[]) {
     const image = await page.request.get(new URL(icon.src, APP).href);
@@ -75,7 +78,7 @@ test("links a web app manifest", async ({ page }) => {
 test.describe("header bar", () => {
   onlyIn(["desktop", "tablet"], "the header bar's download button; the phone's menu has the entry Install app instead");
 
-  test("website: download button opens the install prompt", async ({ page }) => {
+  test("website: download button opens the install dialog, whose button shows the install prompt (REQ-806)", async ({ page }) => {
     await page.goto(APP);
     await expect(page.locator('[data-region="header"]').getByRole("button", { name: "Info" })).toBeVisible();
     // Chromium without an install prompt (not installable or already installed): no button.
@@ -83,6 +86,13 @@ test.describe("header bar", () => {
     await offerInstallPrompt(page);
     await expect(downloadButton(page)).toBeVisible();
     await downloadButton(page).click();
+    const dialog = page.getByRole("dialog", { name: "Install Graupel as an app" });
+    // REQ-843: the reasons as a list, without the heading "Why install?".
+    await expect(dialog.getByTestId("install-why").getByRole("listitem")).toHaveCount(2);
+    await expect(dialog).not.toContainText("Why install?");
+    expect(await page.evaluate(() => (window as unknown as { __prompted: number }).__prompted)).toBe(0);
+    await dialog.getByRole("button", { name: "Install now" }).click();
+    await expect(dialog).toBeHidden();
     expect(await page.evaluate(() => (window as unknown as { __prompted: number }).__prompted)).toBe(1);
     await expect(downloadButton(page)).toHaveCount(0);
 
@@ -91,6 +101,45 @@ test.describe("header bar", () => {
     await page.evaluate(() => window.dispatchEvent(new Event("appinstalled")));
     await expect(downloadButton(page)).toHaveCount(0);
   });
+});
+
+// REQ-806: also with the browser's own install prompt the dialog starts with why to install, above its button, and
+// fits the screen in every class (header bar or the phone's menu). REQ-843: the list comes first, without heading.
+// REQ-852: the second reason names the browser's address and navigation bars.
+test("browser's own install prompt: why install above the button, dialog on the screen (REQ-806, REQ-843, REQ-852)", async ({ page }) => {
+  await page.clock.setFixedTime(FIXED_NOW);
+  await page.route("https://api.open-meteo.com/v1/forecast**", (route) => fakeForecast(route, { now: FIXED_NOW }));
+  await page.goto(APP);
+  await offerInstallPrompt(page);
+  await (await headerControl(page, "button", /^(Download|Install app)$/)).click();
+  const dialog = page.getByRole("dialog", { name: "Install Graupel as an app" });
+  await expect(dialog).toBeVisible();
+  const why = dialog.getByTestId("install-why");
+  await expect(why).toBeVisible();
+  await expect(dialog.getByRole("heading")).toHaveText(["Install Graupel as an app"]);
+  await expect(dialog).not.toContainText("Why install?");
+  // The list is the first thing in the dialog's body, right below its title.
+  expect(await why.evaluate((list) => list.tagName === "UL" && list.parentElement?.firstElementChild === list)).toBe(true);
+  await expect(why.getByRole("listitem")).toHaveText([
+    "Weather data you fetch stays in the history: view it offline or compare it with newer data.",
+    "A better view on phone and tablet, without the browser’s address and navigation bars.",
+  ]);
+  const install = dialog.getByRole("button", { name: "Install now" });
+  await expect(install).toBeVisible();
+  const whyBox = (await why.boundingBox())!;
+  const installBox = (await install.boundingBox())!;
+  expect(whyBox.y + whyBox.height).toBeLessThanOrEqual(installBox.y);
+  // The whole dialog on the screen, nothing wider than it.
+  const viewport = page.viewportSize()!;
+  const box = (await dialog.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await install.click();
+  await expect(dialog).toBeHidden();
+  expect(await page.evaluate(() => (window as unknown as { __prompted: number }).__prompted)).toBe(1);
 });
 
 test("phone: download only as icon right of info, in one row (REQ-501)", async ({ page }) => {
@@ -153,9 +202,6 @@ async function withoutInstallPrompt(page: Page) {
   });
 }
 
-/** Fixed time: Wednesday, 28 October 2026, 11:00 UTC. */
-const FIXED_NOW = Date.UTC(2026, 9, 28, 11);
-
 /** The install hint of a browser without install prompt, by user agent: only what works on this device (REQ-658). */
 async function installHint(page: Page) {
   await page.clock.setFixedTime(FIXED_NOW);
@@ -178,6 +224,11 @@ test.describe("install hint on Windows in Firefox (REQ-658)", () => {
   test("names Chrome and Edge, but no iPhone, iPad or Mac", async ({ page }) => {
     const hint = await installHint(page);
     await expect(hint).toHaveAttribute("data-platform", "desktop");
+    // REQ-806: why install comes first, also above the hint without pictures.
+    const why = page.getByTestId("install-why");
+    await expect(why.getByRole("listitem")).toHaveCount(2);
+    await expect(page.getByText("Why install?")).toHaveCount(0);
+    expect((await why.boundingBox())!.y).toBeLessThan((await hint.boundingBox())!.y);
     await expect(hint).toHaveText(
       "This browser cannot install Graupel as an app. Open the page in Chrome or Edge and use “Install” in the address bar or the menu.",
     );
@@ -202,7 +253,7 @@ test.describe("install hint on a Mac in Firefox (REQ-658)", () => {
   });
 });
 
-test.describe("install hint on the iPhone in Chrome (REQ-658)", () => {
+test.describe("install hint on the iPhone in Chrome (REQ-658, REQ-775)", () => {
   test.use({
     userAgent:
       "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0.6478.54 Mobile/15E148 Safari/604.1",
@@ -210,10 +261,16 @@ test.describe("install hint on the iPhone in Chrome (REQ-658)", () => {
   });
   ownDevice();
 
-  test("shows Share › Add to Home Screen, no Mac and no other browser to switch to", async ({ page }) => {
-    const hint = await installHint(page);
-    await expect(hint).toHaveAttribute("data-platform", "ios");
-    await expect(hint).toContainText("Add to Home Screen");
-    await expect(hint).not.toContainText(/Mac|Windows|Chrome|Edge/);
+  test("shows Chrome's steps to Add to Home Screen, no Mac and no other browser to switch to", async ({ page }) => {
+    await page.clock.setFixedTime(FIXED_NOW);
+    await page.route("https://api.open-meteo.com/v1/forecast**", (route) => fakeForecast(route, { now: FIXED_NOW }));
+    await withoutInstallPrompt(page);
+    await page.goto(APP);
+    await downloadButton(page).click();
+    const dialog = page.getByRole("dialog", { name: "Install Graupel as an app" });
+    // Since REQ-775 the steps with pictures (e2e/install-steps.spec.ts) instead of the one-line hint.
+    await expect(dialog.locator("[data-guide]")).toHaveAttribute("data-guide", "iosChrome");
+    await expect(dialog).toContainText("Add to Home Screen");
+    await expect(dialog).not.toContainText(/Mac|Windows|Edge|Safari/);
   });
 });

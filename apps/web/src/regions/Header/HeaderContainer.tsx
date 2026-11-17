@@ -14,15 +14,17 @@ export interface HeaderContainerProps {
 
 /**
  * Header of the page with the download button wired up (REQ-425): shown only on the website, never in the
- * installed app. With an install prompt (Chromium) it opens the prompt; in browsers without one (Safari, Firefox)
- * it opens install instructions. Hidden after `appinstalled` and in Chromium while no prompt is offered.
+ * installed app. It opens the install dialog, which starts with why to install (REQ-806): with an install prompt
+ * (Chromium) its button shows the prompt; in browsers without one (Safari, Firefox) it shows install
+ * instructions. Hidden after `appinstalled`, in Chromium while no prompt is offered and when the settings hide it
+ * (REQ-809).
  */
 export function HeaderContainer({ appMode, installPrompt }: HeaderContainerProps) {
   const download = useDownload(appMode, installPrompt);
   return (
     <>
       <Header showDownload={download.shown} onDownload={download.start} />
-      {download.instructions && <InstallDialog onClose={download.closeInstructions} />}
+      {download.instructions && <InstallDialog onClose={download.closeInstructions} onInstall={download.install} />}
     </>
   );
 }

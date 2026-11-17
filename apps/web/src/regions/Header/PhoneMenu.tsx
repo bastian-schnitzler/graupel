@@ -30,8 +30,9 @@ export interface PhoneMenuProps {
 /**
  * The phone's menu (REQ-575, REQ-580, REQ-582): a phone has no header bar, so its button stands at the end of the place
  * row, after the favourites. It opens a panel below it with, from the top, the language picker (only with more than one
- * language), "install app" in the accent colour on the website while the installation is offered (REQ-425), settings,
- * a divider and info, imprint and privacy, which open the info popup at their tab (the phone's footer has no links).
+ * language), "install app" in the accent colour on the website while the installation is offered (REQ-425) and the
+ * settings do not hide it (REQ-809), settings, a divider and info, help (REQ-853), imprint and privacy, which open the
+ * info popup at their tab (the phone's footer has no links).
  * In the installed app, once the place has an earlier fetch, "History" stands before settings and opens the history's
  * dialog (REQ-684); it names the day of the fetch shown, the current values' as well as an archived one's (REQ-726).
  * Its clock is gold with the current values while they are at most 20 minutes old (REQ-757), checked again on opening.
@@ -118,7 +119,10 @@ export function PhoneMenu({ appMode, installPrompt }: PhoneMenuProps) {
           </label>
         )}
         {download.shown &&
-          item(<DownloadIcon />, t("menu.install"), download.start, { className: "phone-menu__item--install" })}
+          item(<DownloadIcon />, t("menu.install"), download.start, {
+            className: "phone-menu__item--install",
+            haspopup: "dialog",
+          })}
         {historyShown &&
           item(
             <ClockIcon />,
@@ -137,10 +141,11 @@ export function PhoneMenu({ appMode, installPrompt }: PhoneMenuProps) {
         {item(<SettingsIcon />, t("header.settings"), settings.open, { haspopup: "dialog" })}
         <hr className="phone-menu__divider" />
         {item(<InfoIcon />, t("footer.info"), () => info.open("about"), { haspopup: "dialog" })}
+        {item(null, infoTabLabel("help", legal.imprint, t), () => info.open("help"), { haspopup: "dialog" })}
         {item(null, infoTabLabel("imprint", legal.imprint, t), () => info.open("imprint"), { haspopup: "dialog" })}
         {item(null, t("footer.privacy"), () => info.open("privacy"), { haspopup: "dialog" })}
       </div>
-      {download.instructions && <InstallDialog onClose={download.closeInstructions} />}
+      {download.instructions && <InstallDialog onClose={download.closeInstructions} onInstall={download.install} />}
       {historyOpen && <HistoryDialog onClose={() => setHistoryOpen(false)} />}
     </div>
   );

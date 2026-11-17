@@ -208,7 +208,8 @@ test("the menu opens below its button and moves nothing; its entries in order (R
   await expect(panel(page).getByRole("combobox", { name: "Language" })).toBeVisible();
   // Chromium offers the installation once it fires its install prompt (REQ-425); then it stands below the language,
   // highlighted (REQ-582).
-  await expect(panel(page).getByRole("button")).toHaveText(["Settings", "Info", "Legal notice", "Privacy"]);
+  // Help after Info (REQ-853).
+  await expect(panel(page).getByRole("button")).toHaveText(["Settings", "Info", "Help", "Legal notice", "Privacy"]);
   await page.evaluate(() => {
     const event = new Event("beforeinstallprompt", { cancelable: true });
     Object.assign(event, {
@@ -217,7 +218,14 @@ test("the menu opens below its button and moves nothing; its entries in order (R
     });
     window.dispatchEvent(event);
   });
-  await expect(panel(page).getByRole("button")).toHaveText(["Install app", "Settings", "Info", "Legal notice", "Privacy"]);
+  await expect(panel(page).getByRole("button")).toHaveText([
+    "Install app",
+    "Settings",
+    "Info",
+    "Help",
+    "Legal notice",
+    "Privacy",
+  ]);
   const install = panel(page).getByRole("button", { name: "Install app" });
   const background = await install.evaluate((element) => getComputedStyle(element).backgroundColor);
   const accent = await page.evaluate(() => {
@@ -264,6 +272,7 @@ test("the menu opens the settings and the info at its tabs, and switches the lan
 
   for (const [entry, tab] of [
     ["Info", "About"],
+    ["Help", "Help"],
     ["Legal notice", "Legal notice"],
     ["Privacy", "Privacy policy"],
   ] as const) {
@@ -298,6 +307,7 @@ test.describe("desktop", () => {
     expect(border).toBe("1px");
     await expect(page.locator("footer").getByRole("navigation").getByRole("button")).toHaveText([
       "Info",
+      "Help",
       "Legal notice",
       "Privacy",
     ]);

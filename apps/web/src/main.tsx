@@ -4,11 +4,13 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import { ConfigProvider } from "./config/index.ts";
-import { initColorMode, migrateModelChainChoice } from "./state/index.ts";
+import { initColorMode, initKeyboardInput, migrateModelChainChoice } from "./state/index.ts";
 import "./styles/tokens.css";
 import "./styles/global.css";
 
 initColorMode();
+// The close buttons show their focus ring only while the page is used with the keyboard (REQ-776).
+initKeyboardInput();
 migrateModelChainChoice();
 
 const root = document.getElementById("root");

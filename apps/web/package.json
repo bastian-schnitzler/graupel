@@ -1,6 +1,6 @@
 {
   "name": "@graupel/web",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Graupel-Website und App",
   "license": "GPL-3.0-or-later",
@@ -13,7 +13,8 @@
     "licenses": "node scripts/third-party.mjs",
     "test": "vitest run",
     "lint": "eslint src test e2e scripts",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "screenshots": "playwright test --config e2e/manifest-screenshots.config.ts"
   },
   "dependencies": {
     "@graupel/download": "workspace:*",

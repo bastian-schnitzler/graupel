@@ -30,7 +30,14 @@ export function Icon({ name, className }: { name: keyof typeof PATHS; className?
       strokeLinejoin="round"
       strokeLinecap="round"
     >
-      <path d={PATHS[name]} />
+      {name === "refresh" ? (
+        // Turns while another place loads (REQ-751), inside the picture about the circle's centre (REQ-860).
+        <g className="icon__turn">
+          <path d={PATHS[name]} />
+        </g>
+      ) : (
+        <path d={PATHS[name]} />
+      )}
     </svg>
   );
 }

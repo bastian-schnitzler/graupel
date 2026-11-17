@@ -6,6 +6,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AllModelsFailedError,
   ApiError,
+  DEFAULT_TIMEOUT_MS,
+  DEFAULT_TOTAL_TIMEOUT_MS,
+  DownloadTimeoutError,
   OutOfDomainError,
   buildQuery,
   canonicalModelId,
@@ -207,6 +210,58 @@ describe("retries, errors and limits", () => {
     const result = await client.fetchForecast({ ...berlin });
     expect(calls).toHaveLength(2);
     expect(result.latitude).toBe(52.52);
+  });
+
+  it("REQ-863: gives a hanging request up after 10 s per attempt by default, after 31.5 s with two retries", async () => {
+    vi.useFakeTimers();
+    try {
+      const hanging = (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+        });
+      const { fn, calls } = mockFetch(hanging);
+      const client = createClient({ fetch: fn });
+      const started = Date.now();
+      let settledAfterMs: number | undefined;
+      const pending = client.fetchForecast({ ...berlin }).catch((e: unknown) => {
+        settledAfterMs = Date.now() - started;
+        return e;
+      });
+
+      await vi.advanceTimersByTimeAsync(10_000); // first attempt times out, backoff 0.5 s
+      expect(calls).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(calls).toHaveLength(2);
+      await vi.advanceTimersByTimeAsync(10_999); // second attempt times out at 20.5 s, backoff 1 s
+      expect(calls).toHaveLength(2);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(calls).toHaveLength(3);
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(settledAfterMs).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+
+      const error = await pending;
+      expect(settledAfterMs).toBe(31_500);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBeNull();
+      expect((error as ApiError).message).toBe("Open-Meteo request timed out after 10000 ms");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("REQ-863: keeps a timeout set by the caller and offers the default total limit of downloadChain", () => {
+    expect(DEFAULT_TIMEOUT_MS).toBe(10_000);
+    expect(DEFAULT_TOTAL_TIMEOUT_MS).toBe(60_000);
+    const { fn } = mockFetch(json(sampleResponse));
+    expect(createClient({ fetch: fn }).totalTimeoutMs).toBe(60_000);
+    expect(createClient({ fetch: fn, totalTimeoutMs: 45_000 }).totalTimeoutMs).toBe(45_000);
+    expect(createClient({ fetch: fn, totalTimeoutMs: 0 }).totalTimeoutMs).toBe(0);
+    const error = new DownloadTimeoutError(45_000);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("DownloadTimeoutError");
+    expect(error.timeoutMs).toBe(45_000);
+    expect(error.message).toBe("Download did not finish within 45000 ms");
   });
 
   it("stops at once when the caller aborts", async () => {

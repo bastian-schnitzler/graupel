@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Info button of a model with its popover (catalogue details): on each card of the model chain (`ModelSegment`) and,
- * while the weather chain is hidden, in the meteogram's model header (REQ-643, `ModelHeaderInfo`). On a phone the
- * details open as a dialog as big as the settings, with the close button at the top right (REQ-719).
+ * while the weather chain is hidden, in the meteogram's model header (REQ-643, `ModelHeaderInfo`). On a phone or a
+ * tablet the weather chain's buttons stand in the model headers while those are shown, else on the cards
+ * (REQ-820, `modelInfoPlaces`). On a phone the details open as a dialog as big as the settings, with the close button at
+ * the top right (REQ-719).
  */
 import type { ForecastResult, WeatherModel } from "@graupel/download";
 import {
@@ -23,8 +25,10 @@ import { Dialog } from "../../../dialogs/Dialog.tsx";
 import { InfoIcon } from "../../../icons/index.ts";
 import { useI18n, useT } from "../../../i18n/index.ts";
 import { httpsUrl, type ModelMeta } from "../../../state/chain.ts";
+import { useModelHeaders } from "../../../state/displaySettings.ts";
 import { useForecast } from "../../../state/forecast.ts";
 import { usePhone } from "../../../state/phoneLandscape.ts";
+import { useChainCardsVisible } from "../../../state/modelChainView.ts";
 import { readSideInsets } from "../../../state/safeArea.ts";
 import {
   describeHorizon,
@@ -37,6 +41,33 @@ import {
 } from "./modelRuns.ts";
 
 const POPOVER_MARGIN_PX = 8;
+
+/** Where the info buttons of the weather chain's models stand. */
+export interface ModelInfoPlaces {
+  /** In the meteogram's model headers (`ModelHeaderInfo`), where they fit. */
+  header: boolean;
+  /** On the cards of the weather chain (`ModelSegment`). */
+  chain: boolean;
+}
+
+/**
+ * Where the weather chain's info buttons stand. On the desktop always on the cards, and in the model headers while the
+ * weather chain card is hidden (REQ-643). On a phone or a tablet (`usePhone`, REQ-728) in the model headers while they
+ * are shown, and on the cards only while the headers are hidden (REQ-820). The cloud chain's cards keep theirs: its
+ * models have no header.
+ */
+export function modelInfoPlaces(phone: boolean, modelHeaders: boolean, weatherChainShown: boolean): ModelInfoPlaces {
+  if (phone) return { header: modelHeaders, chain: !modelHeaders };
+  return { header: !weatherChainShown, chain: true };
+}
+
+/** `modelInfoPlaces` for this page: device class, the setting "Model headers" and the weather chain card. */
+export function useModelInfoPlaces(): ModelInfoPlaces {
+  const phone = usePhone();
+  const modelHeaders = useModelHeaders();
+  const weatherChainShown = useChainCardsVisible().weather;
+  return modelInfoPlaces(phone, modelHeaders, weatherChainShown);
+}
 
 export interface ModelInfoPopoverProps {
   id?: string;

@@ -11,27 +11,12 @@
 }
 
 /*
- * Tab bar below the heading row (REQ-686), outside the scrolling body. All tabs stay in one row; when they do not fit
- * (a phone, long labels) the bar scrolls sideways without a visible scrollbar, and the selected tab is scrolled into
- * view. The underline sits inside the bar, so it never adds a vertical scrollbar.
+ * Tab bar below the heading row (REQ-686), outside the scrolling body. One row of tabs that fits or scrolls sideways,
+ * as in every popup (Tabs.css, REQ-780).
  */
 .settings-tabs {
   flex: none;
-  flex-wrap: nowrap;
   padding: 0 var(--space-2);
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  overscroll-behavior-x: contain;
-}
-
-.settings-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.settings-tabs .tabs__tab {
-  white-space: nowrap;
-  overflow-wrap: normal;
 }
 
 /* The sections of a tab stacked, separated by a line. */

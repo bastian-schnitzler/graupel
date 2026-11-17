@@ -14,7 +14,19 @@
  *   over there. Gaps inside a slice stay null:
  *   no model ever fills another model's hours.
  * - A failing model only empties its own slice; when every model fails,
- *   {@link AllModelsFailedError} is thrown.
+ *   {@link AllModelsFailedError} is thrown. That happens as soon as the main
+ *   chain models have settled: the sun-time and cloud requests still running
+ *   are aborted instead of awaited (REQ-863). While one model delivers, sun
+ *   times and clouds are awaited and their failure is only a warning.
+ * - Every download has its own `AbortController`, which follows the caller's
+ *   signal. Aborted requests free their place in the client's concurrency
+ *   limit; queued ones do not start.
+ * - A total limit (`totalTimeoutMs`, default `client.totalTimeoutMs`, 60 s;
+ *   0 or Infinity: none) counts from the call over every step. When it is
+ *   reached, every request of the download is aborted and the download
+ *   rejects with {@link DownloadTimeoutError}: no partial result, no cache
+ *   entry (REQ-863). A cache hit comes at once. When the caller aborts, the
+ *   download rejects with the reason of the caller's signal.
  * - A main chain model that answers but delivers no current data (no value
  *   from now on, e.g. a discontinued model) is replaced by a fine model with
  *   current data at the place, which takes its slice up to its own data end
@@ -26,7 +38,13 @@
  *   `runSegments: false`, and one warning names the outage (REQ-633).
  */
 
-import { AllModelsFailedError, toOpenMeteoModel, type OpenMeteoClient } from "./client";
+import {
+  AllModelsFailedError,
+  DEFAULT_TOTAL_TIMEOUT_MS,
+  DownloadTimeoutError,
+  toOpenMeteoModel,
+  type OpenMeteoClient,
+} from "./client";
 import {
   DOMAIN_MARGIN_DEG,
   FALLBACK_EXCLUDED,
@@ -116,6 +134,13 @@ export interface DownloadChainRequest {
   runSegments?: boolean;
   /** Skip the cache lookup (the new result is still stored). */
   refresh?: boolean;
+  /**
+   * Total limit of this download in milliseconds, counted from the call over every step (default
+   * `client.totalTimeoutMs`, 60 000; 0 or Infinity switches it off). When it is reached, the download aborts its
+   * requests and rejects with {@link DownloadTimeoutError} (REQ-863).
+   */
+  totalTimeoutMs?: number;
+  /** Aborts the download; it then rejects with the signal's reason. */
   signal?: AbortSignal;
   /** Receives every warning as it happens (also collected in `warnings`). */
   onWarning?: (message: string) => void;
@@ -420,10 +445,18 @@ export function forecastCacheKey(parts: {
   ].join(";");
 }
 
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException("The operation was aborted.", "AbortError");
+}
+
 function throwIfAborted(signal?: AbortSignal): void {
-  if (signal?.aborted) {
-    throw signal.reason ?? new DOMException("The operation was aborted.", "AbortError");
-  }
+  if (signal?.aborted) throw abortReason(signal);
+}
+
+/** Total limit of a download in milliseconds, or null when it is switched off (0, Infinity, negative). */
+function totalLimit(client: OpenMeteoClient, request: DownloadChainRequest): number | null {
+  const limit = request.totalTimeoutMs ?? client.totalTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS;
+  return limit > 0 && Number.isFinite(limit) ? limit : null;
 }
 
 function message(error: unknown): string {
@@ -460,15 +493,61 @@ function toChainResult(
  * Download the main chain (and cloud chain) for a location and stitch them.
  * See the module comment for the rules. Results are cached in
  * `client.cache` per location, chains, quantities, options and forecast hour.
+ *
+ * Rejects with {@link AllModelsFailedError} as soon as every main chain model
+ * failed, with {@link DownloadTimeoutError} when the total limit
+ * (`totalTimeoutMs`) is reached, and with the signal's reason when the caller
+ * aborts (REQ-863); every request still running is aborted then.
  */
 export async function downloadChain(
   client: OpenMeteoClient,
   request: DownloadChainRequest,
   data: DownloadData,
 ): Promise<ForecastResult> {
-  const { signal } = request;
+  const caller = request.signal;
+  // Own controller of this download: follows the caller, the total limit and the failure of every model (REQ-863).
+  const download = new AbortController();
+  const limit = totalLimit(client, request);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let onCallerAbort: (() => void) | undefined;
+  const stopped = new Promise<never>((_resolve, reject) => {
+    onCallerAbort = () => {
+      const reason = abortReason(caller as AbortSignal);
+      download.abort(reason);
+      reject(reason);
+    };
+    if (caller?.aborted) onCallerAbort();
+    else caller?.addEventListener("abort", onCallerAbort, { once: true });
+    if (limit !== null) {
+      timer = setTimeout(() => {
+        const error = new DownloadTimeoutError(limit);
+        download.abort(error);
+        reject(error);
+      }, limit);
+    }
+  });
+  try {
+    // Reject at once on the limit or the caller's abort, without waiting for the aborted requests to settle.
+    return await Promise.race([runDownload(client, request, data, download), stopped]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    if (onCallerAbort) caller?.removeEventListener("abort", onCallerAbort);
+    // Nothing of this download keeps running.
+    if (!download.signal.aborted) download.abort(new DOMException("The download has ended.", "AbortError"));
+  }
+}
+
+async function runDownload(
+  client: OpenMeteoClient,
+  request: DownloadChainRequest,
+  data: DownloadData,
+  download: AbortController,
+): Promise<ForecastResult> {
+  const signal = download.signal;
   const warnings: string[] = [];
   const warn = (text: string) => {
+    // An aborted download has no result to warn about.
+    if (signal.aborted) return;
     warnings.push(text);
     request.onWarning?.(text);
   };
@@ -527,7 +606,8 @@ export async function downloadChain(
     if (cached) return cached;
   }
 
-  // 1. Sun times, every main model and every cloud model, in parallel.
+  // 1. Sun times, every main model and every cloud model start in parallel; the main models are awaited first, so
+  // that the download stops at once when all of them fail (REQ-863).
   const maxChainHorizonConfigured = Math.max(...chain.map((m) => m.max_forecast_horizon_hours));
   const fetchHorizons = new Map(chain.map((m) => [m.name, getFetchHorizon(m, maxChainHorizonConfigured, catalogue)]));
   const maxCloudHorizon = Math.max(0, ...cloudChain.map((m) => m.max_forecast_horizon_hours));
@@ -536,7 +616,7 @@ export async function downloadChain(
   const sunPromise = client
     .fetchSunPhases({ latitude: location.latitude, longitude: location.longitude, forecastDays: 16 }, { signal })
     .catch((error: unknown) => {
-      throwIfAborted(signal);
+      // Never rejects: an aborted download may leave this promise behind (`warn` is silent then).
       warn(`Failed to fetch sun phases: ${message(error)}`);
       return [];
     });
@@ -566,7 +646,7 @@ export async function downloadChain(
       ),
     ),
   );
-  const [sunPhases, mainResults, cloudResults] = await Promise.all([sunPromise, mainPromise, cloudPromise]);
+  const mainResults = await mainPromise;
   throwIfAborted(signal);
 
   // 2. Harmonize; a failing model only loses its own slice.
@@ -593,7 +673,15 @@ export async function downloadChain(
       raw = raw.filter((d) => d.model_name !== model.name);
     }
   });
-  if (Object.keys(errors).length === chain.length && !raw.length) throw new AllModelsFailedError(errors);
+  if (Object.keys(errors).length === chain.length && !raw.length) {
+    // Nothing to show: abort the sun-time and cloud requests still running instead of waiting for them (REQ-863).
+    const error = new AllModelsFailedError(errors);
+    download.abort(error);
+    throw error;
+  }
+  // At least one model delivers: wait for the sun times and the clouds as well (their failure is a warning).
+  const [sunPhases, cloudResults] = await Promise.all([sunPromise, cloudPromise]);
+  throwIfAborted(signal);
 
   // 2a. A model that answered without current data gives its slice to another model (REQ-767), when some model of
   // the chain has current data (else the cause lies elsewhere). Candidates are tried in the order of
@@ -1010,6 +1098,8 @@ export async function downloadChain(
     if (replacedModels.length) info.replaced_models = replacedModels;
     result.autoChain = info;
   }
+  // An aborted download (total limit, caller) is never cached.
+  throwIfAborted(signal);
   if (client.cache) await client.cache.set(cacheKey, result);
   return result;
 }

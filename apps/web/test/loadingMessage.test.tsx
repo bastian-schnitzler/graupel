@@ -208,8 +208,40 @@ describe("loading message (REQ-737)", () => {
       join(dirname(dirname(fileURLToPath(import.meta.url))), "src/regions/DaySlider/DaySlider.css"),
       "utf8",
     );
-    expect(css).toMatch(/\.day-slider__loading-icon \{[^}]*animation: day-slider-loading-turn/);
+    expect(css).toMatch(/\.day-slider__loading-icon \.icon__turn \{[^}]*animation: day-slider-loading-turn/);
     const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
-    expect(reduced).toMatch(/\.day-slider__loading-icon[^{]*\{[^}]*animation: none/);
+    expect(reduced).toMatch(/\.day-slider__loading-icon \.icon__turn[^{]*\{[^}]*animation: none/);
+  });
+
+  // REQ-860: the group inside the picture turns, about the view box's centre (12, 12), which is the circle's; the
+  // picture itself does not turn, so where the browser rounds its place does not move the circle.
+  it("turns the group inside the symbol about the circle's centre, not the picture (REQ-860)", () => {
+    fakeDevice(true);
+    const { loader } = pendingLoader();
+    renderPage(loader);
+    const icon = screen.getByTestId("forecast-loading-icon");
+    expect(icon.getAttribute("viewBox")).toBe("0 0 24 24");
+    const turn = icon.firstElementChild!;
+    expect(turn.tagName.toLowerCase()).toBe("g");
+    expect(turn.classList.contains("icon__turn")).toBe(true);
+    expect(icon.children).toHaveLength(1);
+    // Both paths, the circle (centre 12, 12; radius 8) and the arrowhead, turn together.
+    const paths = [...turn.querySelectorAll("path")].map((path) => path.getAttribute("d"));
+    expect(paths).toEqual(["M20 12a8 8 0 1 1-2.34-5.66L20 9", "M20 4v5h-5"]);
+
+    const css = readFileSync(
+      join(dirname(dirname(fileURLToPath(import.meta.url))), "src/regions/DaySlider/DaySlider.css"),
+      "utf8",
+    );
+    const rule = /\n\.day-slider__loading-icon \.icon__turn \{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(rule).toContain("transform-box: view-box;");
+    expect(rule).toContain("transform-origin: 12px 12px;");
+    // Neither the picture's own rule nor the pull's rule turns the picture itself.
+    const own = /\n\.day-slider__loading-icon \{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(own).not.toMatch(/animation|transform/);
+    expect(css).not.toMatch(/\.day-slider__loading-icon \{[^}]*transform:/);
+    expect(css).toMatch(
+      /\.day-slider__loading:not\(\[data-loading\]\) \.day-slider__loading-icon \.icon__turn \{[^}]*transform: rotate\(/,
+    );
   });
 });

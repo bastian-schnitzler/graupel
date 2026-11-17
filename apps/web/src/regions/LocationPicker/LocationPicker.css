@@ -114,6 +114,12 @@
  */
 .location__loading-icon {
   color: var(--color-accent);
+}
+
+/* On the spot as in the day slider (REQ-860, DaySlider.css): the group inside turns, about the view box's centre. */
+.location__loading-icon .icon__turn {
+  transform-box: view-box;
+  transform-origin: 12px 12px;
   animation: location-loading-turn 0.9s linear infinite;
 }
 
@@ -124,7 +130,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .location__loading-icon {
+  .location__loading-icon .icon__turn {
     transform: none;
     animation: none;
   }

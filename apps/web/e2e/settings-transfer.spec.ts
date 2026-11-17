@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Export and import of settings and favourites in a real browser (REQ-429): the exported file restores the
- * language and the favourites; an invalid file is refused with a message and changes nothing.
+ * language and the favourites; an invalid file is refused with a message and changes nothing. The import adds the
+ * file's favourites to the current ones and removes none (REQ-817); the export is named "Export settings and
+ * favourites" (REQ-818).
  */
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "./fixtures.ts";
+import { fakeForecast } from "./openMeteo.ts";
 import { chooseLanguage, headerControl } from "./headerControls.ts";
 
 const APP = "http://localhost:4175/";
@@ -52,7 +55,7 @@ test("exported settings and favourites are restored by an import", async ({ page
   await popup.getByRole("radio", { name: "Maptoolkit" }).check();
 
   const downloadPromise = page.waitForEvent("download");
-  await popup.getByRole("button", { name: "Einstellungen exportieren" }).click();
+  await popup.getByRole("button", { name: "Einstellungen und Favoriten exportieren" }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/^graupel-settings-\d{4}-\d{2}-\d{2}\.json$/);
   const path = await download.path();
@@ -74,16 +77,20 @@ test("exported settings and favourites are restored by an import", async ({ page
   await (await headerControl(page, "button", "Settings")).click();
   await expect(popup.getByRole("radio", { name: "OpenTopoMap" })).toBeChecked();
   await popup.getByTestId("settings-import-file").setInputFiles(path);
-  await expect(popup.getByRole("status")).toHaveText("Einstellungen und Favoriten wurden importiert.");
+  await expect(popup.getByRole("status")).toHaveText(
+    "Einstellungen wurden importiert; die Favoriten der Datei wurden zu den vorhandenen hinzugefügt.",
+  );
   await expect(page.getByRole("dialog", { name: "Einstellungen" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
   await expect(popup.getByRole("radio", { name: "Maptoolkit" })).toBeChecked();
-  await expect(favoriteNames(page)).toHaveText(["Großglockner", "Matterhorn", "Gran Paradiso", "Ortler"]);
+  // Mont Blanc, marked again, stays; the file's places are all favourites already (REQ-817).
+  const after = ["Großglockner", "Matterhorn", "Gran Paradiso", "Ortler", "Mont Blanc"];
+  await expect(favoriteNames(page)).toHaveText(after);
 
   // The import survives a reload.
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
-  await expect(favoriteNames(page)).toHaveText(["Großglockner", "Matterhorn", "Gran Paradiso", "Ortler"]);
+  await expect(favoriteNames(page)).toHaveText(after);
 });
 
 test("an invalid file is refused with a message and changes nothing", async ({ page }) => {
@@ -113,4 +120,74 @@ test("an invalid file is refused with a message and changes nothing", async ({ p
   expect(await stored(page)).toEqual(before);
   await expect(page.locator("html")).toHaveAttribute("lang", "fr");
   await expect(favoriteNames(page)).toHaveCount(5);
+});
+
+// REQ-817, REQ-818: the page starts with one own favourite; a file with two more adds them.
+test.describe("import adds the favourites (REQ-817)", () => {
+  test.use({ storedFavorites: false });
+
+  /** Fixed time: Thursday, 12 November 2026, 10:00 UTC. */
+  const FIXED_NOW = Date.UTC(2026, 10, 12, 10);
+  const MATTERHORN = { name: "Matterhorn", lat: 45.9763, lon: 7.6586, elevation: 4478 };
+  const FILE = {
+    format: "graupel-settings",
+    version: 1,
+    settings: {},
+    favorites: [
+      { name: "Zugspitze", lat: 47.4211, lon: 10.9853, elevation: 2962 },
+      { name: "Säntis", lat: 47.2494, lon: 9.3433, elevation: 2502 },
+    ],
+  };
+  const upload = (name: string, body: unknown) => ({
+    name,
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(body)),
+  });
+
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(FIXED_NOW);
+    await page.route("https://api.open-meteo.com/v1/forecast**", (route) => fakeForecast(route, { now: FIXED_NOW }));
+    await page.addInitScript((favorite) => {
+      if (!localStorage.getItem("graupel.favorites")) {
+        localStorage.setItem("graupel.favorites", JSON.stringify([favorite]));
+        localStorage.setItem("graupel.language", "de");
+      }
+    }, MATTERHORN);
+  });
+
+  test("a file with two favourites, one already there: three afterwards, none lost; export tooltip names the favourites (REQ-817, REQ-818)", async ({
+    page,
+  }) => {
+    await page.goto(APP);
+    await expect(favoriteNames(page)).toHaveText(["Matterhorn"]);
+    await (await headerControl(page, "button", "Einstellungen")).click();
+    const popup = page.getByRole("dialog", { name: "Einstellungen" });
+    await expect(popup).toBeVisible();
+
+    // REQ-818: the export's tooltip and name.
+    const exportButton = popup.getByRole("button", { name: "Einstellungen und Favoriten exportieren" });
+    await expect(exportButton).toHaveAttribute("title", "Einstellungen und Favoriten exportieren");
+    // The import's tooltip says the favourites are added.
+    await expect(popup.getByRole("button", { name: "Einstellungen und Favoriten importieren" })).toHaveAttribute(
+      "title",
+      "Einstellungen und Favoriten importieren. Lädt Einstellungen aus einer Datei; ihre Favoriten kommen zu den " +
+        "vorhandenen dazu, keiner wird gelöscht oder doppelt angelegt.",
+    );
+
+    await popup.getByTestId("settings-import-file").setInputFiles(upload("two.json", FILE));
+    await expect(popup.getByRole("status")).toHaveText(
+      "Einstellungen wurden importiert; die Favoriten der Datei wurden zu den vorhandenen hinzugefügt.",
+    );
+    await expect(favoriteNames(page)).toHaveText(["Matterhorn", "Zugspitze", "Säntis"]);
+
+    // The same places again, the Matterhorn under another name a few metres off: nothing is added twice.
+    const again = { ...FILE, favorites: [...FILE.favorites, { name: "Cervino", lat: 45.97634, lon: 7.65858 }] };
+    await popup.getByTestId("settings-import-file").setInputFiles(upload("again.json", again));
+    await expect(favoriteNames(page)).toHaveText(["Matterhorn", "Zugspitze", "Säntis"]);
+
+    await page.reload();
+    await expect(favoriteNames(page)).toHaveText(["Matterhorn", "Zugspitze", "Säntis"]);
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("graupel.favorites") ?? "[]") as unknown);
+    expect(stored).toEqual([MATTERHORN, ...FILE.favorites]);
+  });
 });

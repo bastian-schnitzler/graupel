@@ -113,7 +113,7 @@ describe("domain configurations", () => {
     expect(fr.name).toBeUndefined();
     expect(fr.address).toBeUndefined();
     expect(fr.email).toBeUndefined();
-    // DEC-086: the hoster of the domain (ALL-INKL) as explicit details, so the preview on GitHub Pages shows it too.
+    // DEC-086: the hoster of the domain (ALL-INKL) as explicit details, so a copy on GitHub Pages shows it too.
     expect(imprintHoster(fr, "github-pages")).toEqual({
       name: "ALL-INKL.COM – Neue Medien Münnich",
       address: ["Hauptstraße 68", "02742 Friedersdorf", "Allemagne"],

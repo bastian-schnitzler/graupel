@@ -6,16 +6,33 @@
  * limit (429 "Daily API request limit exceeded"), too many concurrent requests (429 "Too many concurrent requests"),
  * an overloaded or disrupted service (5xx), no answer at all (network error, timeout, or a request the browser blocked,
  * e.g. CORS), else a general error. With mixed reasons the most frequent one counts.
+ *
+ * REQ-861: a load that did not end within its time limit (`ForecastTimeoutError`) has a reason of its own.
  */
 import { AllModelsFailedError, ApiError } from "@graupel/download";
 import type { MessageKey } from "../i18n/index.ts";
 
 /**
+ * A load of the forecast that the page gave up after `timeoutMs` (REQ-861): Open-Meteo (or the network) did not answer
+ * in time, so the page stops waiting and offers "Try again".
+ */
+export class ForecastTimeoutError extends Error {
+  readonly timeoutMs: number;
+
+  constructor(timeoutMs: number) {
+    super(`The forecast did not load within ${timeoutMs} ms`);
+    this.name = "ForecastTimeoutError";
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+/**
  * The reasons. Equally frequent reasons go to the one first in this list: an answer of Open-Meteo says more than a
  * missing one, and every named reason more than the general one. The daily limit leads, since trying again does not
- * help before the next day, while too many concurrent requests pass in a moment.
+ * help before the next day, while too many concurrent requests pass in a moment. A timeout (REQ-861) is never one of
+ * several reasons: it is the error of the whole load.
  */
-export const FORECAST_FAILURES = ["dailyLimit", "concurrent", "unavailable", "offline", "general"] as const;
+export const FORECAST_FAILURES = ["dailyLimit", "concurrent", "unavailable", "timeout", "offline", "general"] as const;
 
 export type ForecastFailure = (typeof FORECAST_FAILURES)[number];
 
@@ -24,6 +41,7 @@ export const FORECAST_FAILURE_DETAIL: Readonly<Record<ForecastFailure, MessageKe
   dailyLimit: "forecast.reason.dailyLimit",
   concurrent: "forecast.reason.concurrent",
   unavailable: "forecast.reason.unavailable",
+  timeout: "forecast.reason.timeout",
   offline: "forecast.reason.offline",
   general: null,
 };
@@ -33,6 +51,7 @@ export const FORECAST_FAILURE_DETAIL: Readonly<Record<ForecastFailure, MessageKe
  * 429 (e.g. an hourly or monthly limit) is a general error.
  */
 export function modelFailure(error: unknown): ForecastFailure {
+  if (error instanceof ForecastTimeoutError) return "timeout";
   if (!(error instanceof ApiError)) return "general";
   const reason = (error.reason ?? "").toLowerCase();
   if (reason.includes("daily api request limit")) return "dailyLimit";

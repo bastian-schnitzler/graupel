@@ -260,9 +260,10 @@ startet `vite preview`).
   sicheren Kreis von 80 % Durchmesser. Nur `logo-192.png` (Logo im Info-Popup) bleibt durchsichtig.
   `test/icons.test.ts` prüft Größen, Deckkraft, Hintergrund, sichere Zone, Manifest und Favicon. Das Logo
   steht nur im Info-Popup, Tab About (`dialogs/info/AboutPanel.tsx`: Logo, Name, Beschreibung, Version aus
-  `package.json` über `src/version.ts`, Quellcode, Open-Meteo mit CC BY 4.0 und dem Hinweis, dass die Daten
+  `package.json` über `src/version.ts`, Quellcode mit dem Hinweis auf GitHub Issues (REQ-855), Open-Meteo mit CC BY 4.0 und dem Hinweis, dass die Daten
   vereinheitlicht und zu einer Zeitachse zusammengesetzt wurden (REQ-478), beide Kartenanbieter (OpenTopoMap und Maptoolkit, unabhängig von der Wahl, REQ-517) mit
-  © OpenStreetMap contributors, Lizenz mit Link auf `LICENSE` und dem Knopf „Lizenzen Dritter“).
+  © OpenStreetMap contributors, Lizenz mit Link auf `LICENSE` und dem Knopf „Lizenzen Dritter“, zuletzt die
+  Modellkarte mit dem Link auf den Domain-Viewer und der Auswahl der Modellketten, REQ-856).
 - Lizenzen Dritter als Popup (REQ-514): Der Knopf im Tab About öffnet über dem Info-Popup einen zweiten `Dialog`
   (`dialogs/info/ThirdPartyDialog.tsx`, per `React.lazy` ein eigener kleiner Chunk). Er lädt erst dann
   `THIRD_PARTY_LICENSES.md` neben `index.html` per `fetch` (`loadNotice`; HTTP-Fehler und eine HTML-Seite statt der
@@ -276,7 +277,7 @@ startet `vite preview`).
   `info.imprint.*`: Betreiber mit Name und Adresse oder sonst Wohnort (und E-Mail, wenn gesetzt), ohne Namen der
   Hinweis, dass die Angaben beim Hosting-Anbieter liegen; mit `hoster` den Hosting-Anbieter (`imprintHoster()`, bei
   `true` der Anbieter aus `legal.hosting` nach `HOSTERS`, ohne das Feld GitHub) mit Adresse und Telefon. Angaben als
-  Objekt bleiben auf jedem Ziel gleich; so zeigt .fr ALL-INKL auch in der Vorschau (DEC-086). `test/imprint.test.tsx` und `e2e/imprint.spec.ts` prüfen jede Domain.
+  Objekt bleiben auf jedem Ziel gleich; so zeigt .fr ALL-INKL auch auf einer Kopie bei einem anderen Hoster (DEC-086). `test/imprint.test.tsx` und `e2e/imprint.spec.ts` prüfen jede Domain.
 - Datenschutzerklärung (REQ-432): `dialogs/info/PrivacyPanel.tsx` mit Texten unter `privacy.*` in allen acht
   Sprachen; sprachunabhängige Angaben (Stand `PRIVACY_UPDATED`, Links, Abschnitt je Hoster in `HOSTING` und je
   Kartenanbieter) in `dialogs/info/privacy.ts`. Der Abschnitt Hosting nennt den Anbieter aus `legal.hosting`
@@ -312,8 +313,10 @@ startet `vite preview`).
   andere).
 - `public/manifest.webmanifest`: Web-App-Manifest (Name, `start_url` und `scope` `./`, `display: standalone`,
   `theme_color` aus den Tokens, `background_color` `#dbe8f5` wie der Grund der Symbole). Die Symbole
-  `icons/icon-192.png` und `icons/icon-512.png` (`any`) sowie ihre `maskable`-Fassungen kommen mit dem Logo (REQ-424,
-  REQ-516); ohne sie ist die Seite nicht installierbar. Chromium verlangt keinen Service Worker mehr; Offline-Betrieb folgt
+  `app-icons/icon-192.png` und `app-icons/icon-512.png` (`any`) sowie ihre `maskable`-Fassungen kommen mit dem Logo (REQ-424,
+  REQ-516); ohne sie ist die Seite nicht installierbar. Der Ordner heißt `app-icons/`, nicht `icons/`: Apache leitet `/icons/` auf
+  seine eigenen Symbole um, dort fehlten sie auf den Domains (REQ-777, REQ-779). Der Build prüft, dass jedes Symbol,
+  das `index.html`, das Manifest und der Info-Tab nennen, in `dist/` liegt (`checkSite` in `scripts/package-site.mjs`). Chromium verlangt keinen Service Worker mehr; Offline-Betrieb folgt
   mit den App-Funktionen.
 - Tests: `test/setup.ts` ergänzt jsdom um `showModal`/`close` für `<dialog>`.
 - `src/styles/tokens.css`: Design-Tokens als CSS-Variablen, hell und dunkel (System über
@@ -611,8 +614,8 @@ der Domains liegen in `domains/<tld>/config.json` und werden in deren Repos kopi
   Telefon, auf .fr ALL-INKL; `imprintHoster()` liefert die Angaben; at, ch, it und eu nennen die Kontakt-E-Mail, DEC-032). In `legal.privacy` nennt .fr den
   Verantwortlichen der Datenschutzerklärung mit Name und E-Mail (`controller`, DEC-028, DEC-032; das Impressum bleibt
   anonym) und nur .ch zeigt den Hinweis für die Schweiz (`swissNotice: true`, DEC-029). Alle Domains setzen
-  `legal.hosting: "all-inkl"` (REQ-710); die Vorschau (`previewConfig` in `scripts/build-preview.mjs`) setzt dort
-  `github-pages`, weil sie auf GitHub Pages läuft, und lässt das Impressum unverändert (DEC-086). `test/domains.test.tsx` prüft jede Datei und rendert die Seite damit, `e2e/domains.spec.ts`
+  `legal.hosting: "all-inkl"` (REQ-710); eine Seite auf GitHub Pages setzt dort `github-pages` und lässt das
+  Impressum unverändert (DEC-086). `test/domains.test.tsx` prüft jede Datei und rendert die Seite damit, `e2e/domains.spec.ts`
   lädt sie im Browser.
 - Release: `scripts/package-site.mjs` (ohne Abhängigkeiten) packt die gebaute Seite als `graupel-site.zip` (mit
   Standard-`config.json`); ausgeliefert wird sie je Domain mit deren `config.json`. Die gebaute Seite ist statisch und

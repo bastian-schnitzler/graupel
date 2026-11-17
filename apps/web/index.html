@@ -10,11 +10,13 @@
     <!-- Kennung bei Maptoolkit (REQ-698): Origin und Referer tragen nur die Domain der Seite (graupel.eu, …), nie Pfad
          oder Ort. maptoolkitStyle.ts setzt dieselbe Policy für jede Kartenanfrage. -->
     <meta name="referrer" content="strict-origin-when-cross-origin" />
-    <!-- Graupel-Wolke (REQ-424) auf hellblauem Grund (REQ-516); erzeugt mit scripts/generate-icons.mjs. -->
+    <!-- Graupel-Wolke (REQ-424) auf hellblauem Grund (REQ-516); erzeugt mit scripts/generate-icons.mjs. Ordner
+         app-icons/, nicht icons/: Apache leitet /icons/ auf seine eigenen Symbole um (REQ-777, REQ-779,
+         RESERVED_FOLDERS in scripts/package-site.mjs). Vite schreibt die Pfade relativ zur Seite (base "./"). -->
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <!-- Installierbar als App (REQ-425); die Symbole unter icons/ liefert das Logo (REQ-424). Auf Android im Vollbild
+    <link rel="icon" href="/app-icons/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/app-icons/apple-touch-icon.png" />
+    <!-- Installierbar als App (REQ-425); die Symbole unter app-icons/ liefert das Logo (REQ-424). Auf Android im Vollbild
          ohne Status- und Navigationsleiste, sonst standalone (REQ-755, display im Manifest, state/appMode.ts). -->
     <link rel="manifest" href="./manifest.webmanifest" />
     <!-- Leisten von Browser und App (Statusleiste, Fläche über der heruntergezogenen Seite) in der Hintergrundfarbe

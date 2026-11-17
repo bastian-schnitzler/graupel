@@ -118,15 +118,17 @@ describe("footer", () => {
     return screen.getByRole("navigation", { name: language === "de" ? "Informationen" : "Information" });
   }
 
-  it("links Info, imprint and data information, each opening its tab of the info popup", () => {
+  it("links Info, help, imprint and data information, each opening its tab of the info popup (REQ-849)", () => {
     const nav = renderFooter();
     expect(within(nav).getAllByRole("button").map((button) => button.textContent)).toEqual([
       "Info",
+      "Help",
       "Legal notice",
       "Privacy",
     ]);
     for (const [link, tab] of [
       ["Info", "About"],
+      ["Help", "Help"],
       ["Legal notice", "Legal notice"],
       // REQ-484: the footer keeps the short link, the popup tab names the full privacy policy.
       ["Privacy", "Privacy policy"],
@@ -147,6 +149,7 @@ describe("footer", () => {
     const nav = renderFooter(config, "de");
     expect(within(nav).getAllByRole("button").map((button) => button.textContent)).toEqual([
       "Info",
+      "Hilfe",
       "Mentions légales",
       "Datenschutz",
     ]);

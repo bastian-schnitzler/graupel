@@ -751,7 +751,7 @@ describe("buttons in the card and the full-screen view", () => {
       within(screen.getByRole("navigation", { name: "Information" }))
         .getAllByRole("button")
         .map((button) => button.textContent),
-    ).toEqual(["Info", "Legal notice", "Privacy"]);
+    ).toEqual(["Info", "Help", "Legal notice", "Privacy"]);
   });
 
   it("on a phone the copy and save buttons stand alone in the page footer's row (REQ-541, REQ-550, REQ-582)", async () => {

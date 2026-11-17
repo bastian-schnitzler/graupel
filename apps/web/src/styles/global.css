@@ -42,6 +42,27 @@ canvas {
   outline-offset: 2px;
 }
 
+/*
+ * The X of every dialog and popup (REQ-762, REQ-776): installing, information, settings, history, model info, error
+ * cards, legend and the full-screen view on every device. No frame around it, neither when the dialog opens and
+ * focuses it (the focus stays there for screen readers) nor on a click or a tap: no focus ring (outline, box-shadow)
+ * and no touch highlight. Only while the page is used with the keyboard (`data-keyboard` on <html>, keyboardInput.ts)
+ * a subtle ring in the icon's colour shows where the focus is, not the system's blue.
+ */
+.close-button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.close-button:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+:root[data-keyboard] .close-button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
 /* Shared look of a region card; regions add their own layout on top. */
 .region {
   min-width: 0;

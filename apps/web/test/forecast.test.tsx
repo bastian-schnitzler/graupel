@@ -335,7 +335,8 @@ describe("default loader", () => {
       type: "FeatureCollection",
       features: [],
     });
-    expect(fetchMock).toHaveBeenCalledWith("/regions.geojson");
+    // With an abort signal for its time limit (REQ-861).
+    expect(fetchMock).toHaveBeenCalledWith("/regions.geojson", { signal: expect.any(AbortSignal) });
     await expect(
       fetchRegions((async () => new Response("", { status: 404 })) as unknown as typeof fetch, "/x"),
     ).rejects.toThrow("404");

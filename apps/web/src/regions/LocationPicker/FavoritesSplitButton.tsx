@@ -7,7 +7,9 @@
  * arrow, Tab closes.
  * A favourite picked on the map has a pencil on the right of its entry (REQ-489; arrow right reaches it, arrow left
  * goes back, F2 on the entry does the same): it swaps the label for a text field; Enter or leaving the field saves,
- * Escape cancels, an empty name is not taken.
+ * Escape cancels, an empty name is not taken. That is the desktop's way; on a phone and a tablet (`usePhone`, as the
+ * footer and the phone's menu tell them apart) the pencil opens a popup instead (REQ-862, `RenameFavoriteDialog`):
+ * "<name> rename?" with a field, OK and Cancel. The menu stays open behind it and shows the new name.
  * The highlight follows the focus, and the pointer moves the focus: over an entry to that entry, over a pencil to that
  * pencil, so no other entry stays highlighted (REQ-508). While a name is being typed the pointer moves nothing.
  */
@@ -15,7 +17,9 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { Place } from "../../config/index.ts";
 import { useT } from "../../i18n/index.ts";
 import { isMapPointFavorite, ownName, samePlace, type Favorite } from "../../state/index.ts";
+import { usePhone } from "../../state/phoneLandscape.ts";
 import { Icon } from "./Icon.tsx";
+import { RenameFavoriteDialog } from "./RenameFavoriteDialog.tsx";
 
 export interface FavoritesSplitButtonProps {
   /** The selected place, marked by the main part and highlighted in the menu. */
@@ -53,6 +57,9 @@ export function FavoritesSplitButton({
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const [invalid, setInvalid] = useState(false);
+  // On a phone and a tablet the pencil opens a popup (REQ-862): the index of the favourite it asks about.
+  const popup = usePhone();
+  const [asking, setAsking] = useState<number | null>(null);
   // Read by the blur and pointer handlers, which may run after a re-render has ended the editing.
   const editingRef = useRef<number | null>(null);
   const draftRef = useRef("");
@@ -60,13 +67,14 @@ export function FavoritesSplitButton({
   const count = Math.max(favorites.length, 1);
 
   // The active entry has the focus while the menu is open (roving focus); also again after renaming. A pencil the
-  // pointer moved the focus to keeps it.
+  // pointer moved the focus to keeps it, as does the pencil the closed rename popup gives the focus back to; the open
+  // popup keeps it in its field.
   useEffect(() => {
-    if (!open || editing !== null) return;
+    if (!open || editing !== null || asking !== null) return;
     const index = Math.min(active, count - 1);
     if (pencilRefs.current[index] && document.activeElement === pencilRefs.current[index]) return;
     itemRefs.current[index]?.focus();
-  }, [open, active, count, editing]);
+  }, [open, active, count, editing, asking]);
 
   /** The pointer is over the entry or the pencil of row `index`: it gets the focus and with it the highlight. */
   const hover = (index: number, target: HTMLElement) => {
@@ -78,6 +86,11 @@ export function FavoritesSplitButton({
   const startEditing = (index: number) => {
     const favorite = favorites[index];
     if (!favorite) return;
+    if (popup) {
+      setActive(index);
+      setAsking(index);
+      return;
+    }
     editingRef.current = index;
     // A point without own name starts with an empty field (REQ-536).
     const name = ownName(favorite) ?? "";
@@ -184,6 +197,8 @@ export function FavoritesSplitButton({
     }
   };
 
+  // Inside the split button, so a press in the popup counts as inside and leaves the menu open.
+  const asked = asking === null ? undefined : favorites[asking];
   const toggleLabel = t(isFavorite ? "location.favorites.remove" : "location.favorites.add", { name: place.name });
 
   return (
@@ -304,6 +319,17 @@ export function FavoritesSplitButton({
           })
         )}
       </ul>
+      {asked && (
+        <RenameFavoriteDialog
+          label={labelOf(asked)}
+          initial={ownName(asked) ?? ""}
+          onCancel={() => setAsking(null)}
+          onConfirm={(name) => {
+            setAsking(null);
+            if (name !== asked.name) onRename(asked, name);
+          }}
+        />
+      )}
     </div>
   );
 }

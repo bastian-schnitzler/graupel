@@ -39,7 +39,7 @@ test("favicon and touch icons resolve", async ({ page, request }) => {
     expect(contentType, href!).toContain(type ?? "image/png");
   }
   for (const name of ["icon-192", "icon-512", "icon-192-maskable", "icon-512-maskable", "logo-192"]) {
-    const response = await request.get(new URL(`icons/${name}.png`, APP).href);
+    const response = await request.get(new URL(`app-icons/${name}.png`, APP).href);
     expect(response.status(), name).toBe(200);
   }
 });
@@ -74,7 +74,7 @@ for (const width of [375, 1280]) {
     await expect(dialog.getByRole("link", { name: "OpenTopoMap" })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "GPL-3.0-or-later" })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Third-party licenses" })).toBeVisible();
-    // The weather data are the last entry, after maps and license (REQ-491, REQ-646).
+    // The weather data come after maps and license (REQ-491, REQ-646), only the model map follows them (REQ-856).
     await expect(dialog.locator(".about__facts > dt")).toHaveText([
       "Version",
       "Source code",
@@ -82,12 +82,14 @@ for (const width of [375, 1280]) {
       "Map Maptoolkit",
       "License",
       "Weather data",
+      "Model map",
     ]);
-    await expect(dialog.locator(".about__facts > dd").last()).toHaveAttribute("data-testid", "about-data");
+    await expect(dialog.locator(".about__facts > dd").nth(-2)).toHaveAttribute("data-testid", "about-data");
+    await expect(dialog.locator(".about__facts > dd").last()).toHaveAttribute("data-testid", "about-model-map");
     const lastLinks = await dialog
       .locator(".about__facts a")
-      .evaluateAll((links) => links.slice(-2).map((link) => link.textContent));
-    expect(lastLinks).toEqual(["Open-Meteo.com", "CC BY 4.0"]);
+      .evaluateAll((links) => links.slice(-3).map((link) => link.textContent));
+    expect(lastLinks).toEqual(["Open-Meteo.com", "CC BY 4.0", "bastian-schnitzler.github.io/graupel"]);
     const order = await dialog.evaluate((root) => {
       const top = (selector: string) => root.querySelector(selector)!.getBoundingClientRect().top;
       return { data: top('[data-testid="about-data"]'), license: top('button[aria-haspopup="dialog"]') };
@@ -431,6 +433,7 @@ test.describe("with a fixed clock", () => {
       "Karte Maptoolkit",
       "Lizenz",
       "Wetterdaten",
+      "Modellkarte",
     ]);
     await expect(info.getByTestId("about-map-opentopomap-license")).toHaveText("Lizenz: CC BY-SA 3.0");
     await info.getByRole("button", { name: "GPL-3.0-or-later" }).click();
@@ -444,36 +447,33 @@ for (const width of [1280, 360]) {
   for (const locale of ["de-DE", "en-GB", "fr-FR", "it-IT", "nl-NL", "da-DK", "cs-CZ", "sl-SI"]) {
     test.describe(() => {
       test.use({ locale });
-      test(`the info tab bar never scrolls (REQ-518, ${width}px, ${locale})`, async ({ page }) => {
+      // REQ-518: never a visible scrollbar; since REQ-780 the bar may scroll sideways (hidden) where the tabs do not fit.
+      test(`the info tab bar never shows a scrollbar (REQ-518, ${width}px, ${locale})`, async ({ page }) => {
         await page.setViewportSize({ width, height: 800 });
         await page.goto(APP);
         await (await headerControl(page, "button", /^Infos?$/)).click();
         const tabs = page.getByRole("tablist");
-        await expect(tabs.getByRole("tab")).toHaveCount(3);
+        // Four tabs since REQ-819 (Help).
+        await expect(tabs.getByRole("tab")).toHaveCount(4);
         const box = await tabs.evaluate((bar: HTMLElement) => {
           const style = getComputedStyle(bar);
-          const right = Math.max(...[...bar.children].map((tab) => tab.getBoundingClientRect().right));
+          const tops = [...bar.children].map((tab) => Math.round(tab.getBoundingClientRect().top));
           return {
             scrollHeight: bar.scrollHeight,
             clientHeight: bar.clientHeight,
-            scrollWidth: bar.scrollWidth,
-            clientWidth: bar.clientWidth,
-            overflowX: style.overflowX,
-            overflowY: style.overflowY,
+            scrollbarWidth: style.scrollbarWidth,
             // A visible scrollbar takes room from the box: offset size minus borders differs from the client size.
             scrollbar: bar.offsetWidth - bar.clientWidth - parseFloat(style.borderLeftWidth) - parseFloat(style.borderRightWidth),
             scrollbarY: bar.offsetHeight - bar.clientHeight - parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth),
-            tabsRight: right,
-            barRight: bar.getBoundingClientRect().right,
+            rows: new Set(tops).size,
           };
         });
         expect(box.scrollHeight).toBeLessThanOrEqual(box.clientHeight);
-        expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth);
-        expect([box.overflowX, box.overflowY]).toEqual(["visible", "visible"]);
+        expect(box.scrollbarWidth).toBe("none");
         expect(box.scrollbar).toBe(0);
         expect(box.scrollbarY).toBe(0);
-        // Every tab is within the bar, none is cut off.
-        expect(box.tabsRight).toBeLessThanOrEqual(box.barRight + 0.5);
+        // One row of tabs (REQ-780).
+        expect(box.rows).toBe(1);
       });
     });
   }

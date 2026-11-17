@@ -324,7 +324,7 @@ describe("export and import of 'last' (REQ-599)", () => {
     const select = startSelect();
     fireEvent.change(select, { target: { value: "last" } });
     const dialog = within(screen.getByRole("dialog"));
-    fireEvent.click(dialog.getByRole("button", { name: "Export settings" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Export settings and favourites" }));
     const text = await exported();
     expect((JSON.parse(text) as { settings: Record<string, unknown> }).settings.startLocation).toBe("last");
     // The remembered place is no setting.

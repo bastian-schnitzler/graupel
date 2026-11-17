@@ -118,6 +118,15 @@ export function PlusIcon(props: IconProps) {
   );
 }
 
+/** A check mark: the entry shown in the history (REQ-782). */
+export function CheckIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </Icon>
+  );
+}
+
 /** A clock: the history of the installed app (REQ-684). */
 export function ClockIcon(props: IconProps) {
   return (
@@ -155,12 +164,18 @@ export function CopyIcon(props: IconProps) {
   );
 }
 
-/** Circular arrow: load the forecast anew (REQ-637). */
+/**
+ * Circular arrow: load the forecast anew (REQ-637). Its circle's centre is the view box's (12, 12). The group
+ * `icon__turn` is what turns while the forecast loads (REQ-737, REQ-860): inside the picture, about that centre, so the
+ * symbol turns on the spot wherever the browser rounds the picture's place to its pixels (DaySlider.css).
+ */
 export function RefreshIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M20 12a8 8 0 1 1-2.34-5.66L20 9" />
-      <path d="M20 4v5h-5" />
+      <g className="icon__turn">
+        <path d="M20 12a8 8 0 1 1-2.34-5.66L20 9" />
+        <path d="M20 4v5h-5" />
+      </g>
     </Icon>
   );
 }

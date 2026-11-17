@@ -8,6 +8,7 @@ import { I18nProvider, useI18n } from "../src/i18n/index.ts";
 import { LocationPicker, locationHint, type LocationPickerProps } from "../src/regions/LocationPicker/index.ts";
 import { formatCoordinates, formatElevation, nextIndex } from "../src/regions/LocationPicker/format.ts";
 import {
+  correctAttribution,
   enlargeMapLabels,
   featurePlace,
   maptoolkitRequest,
@@ -1370,6 +1371,29 @@ describe("Maptoolkit style helpers", () => {
     const sizes = enlargeMapLabels(style).layers.map((layer) => (layer.layout as Record<string, unknown>)["text-size"]);
     expect(sizes).toEqual([18, 32, 10]);
     expect(scaleTextSize(["get", "size"], 2)).toEqual(["*", ["get", "size"], 2]);
+  });
+
+  it("spells OpenStreetMap with capital S and M in the Maptoolkit attribution (REQ-774)", () => {
+    const style = {
+      version: 8,
+      sources: {
+        maptoolkit: {
+          type: "vector",
+          attribution:
+            '<a href="https://www.maptoolkit.com/copyright/">© Maptoolkit</a> ' +
+            '<a href="https://www.openstreetmap.org/copyright">© Openstreetmap</a>',
+        },
+        other: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+      },
+      layers: [],
+    } as unknown as StyleSpecification;
+    const corrected = correctAttribution(style);
+    const attribution = (corrected.sources.maptoolkit as { attribution: string }).attribution;
+    expect(attribution).toBe(
+      '<a href="https://www.maptoolkit.com/copyright/">© Maptoolkit</a> ' +
+        '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap</a>',
+    );
+    expect(corrected.sources.other).toBe(style.sources.other);
   });
 
   it("turns label features into places", () => {

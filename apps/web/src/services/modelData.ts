@@ -21,14 +21,37 @@ export const REGIONS_URL: string = regionsUrl;
 /** All documents: what `downloadChain` needs for `auto: true` and what the resolver needs. */
 export type ModelData = Required<DownloadData>;
 
-/** Fetches and parses `regions.geojson`; rejects on HTTP errors and on a document without features. */
+/**
+ * Time limit of the regions request, body included (REQ-861): a request that hangs fails, so that the next try of the
+ * forecast fetches anew instead of waiting for the same request forever. The document (about 0.5 MB, less compressed)
+ * takes some 10 s at 400 kbit/s; 30 s stays below the time limit of a whole load (`LOAD_TIMEOUT_MS`).
+ */
+export const REGIONS_TIMEOUT_MS = 30_000;
+
+/**
+ * Fetches and parses `regions.geojson`; rejects on HTTP errors, on a document without features and when it takes
+ * longer than `timeoutMs` (REQ-861).
+ */
 export async function fetchRegions(
   fetchImpl: typeof fetch = fetch,
   url: string = REGIONS_URL,
+  timeoutMs: number = REGIONS_TIMEOUT_MS,
 ): Promise<ResolverData["regions"]> {
-  const response = await fetchImpl(url);
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(new DOMException("Loading the model regions timed out", "TimeoutError")),
+    timeoutMs,
+  );
+  let text: string;
+  let response: Response;
+  try {
+    response = await fetchImpl(url, { signal: controller.signal });
+    text = await response.text();
+  } finally {
+    clearTimeout(timer);
+  }
   if (!response.ok) throw new Error(`Loading the model regions failed (${response.status})`);
-  const regions = JSON.parse(await response.text()) as unknown;
+  const regions = JSON.parse(text) as unknown;
   if (typeof regions !== "object" || regions === null || !Array.isArray((regions as { features?: unknown }).features)) {
     throw new Error("Loading the model regions failed (no features)");
   }

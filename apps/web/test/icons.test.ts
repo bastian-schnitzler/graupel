@@ -80,7 +80,7 @@ function decodePng(file: Buffer): Png {
   return { width, height, pixels };
 }
 
-const readPng = (name: string) => decodePng(readFileSync(join(PUBLIC_DIR, "icons", name)));
+const readPng = (name: string) => decodePng(readFileSync(join(PUBLIC_DIR, "app-icons", name)));
 const pixel = (png: Png, x: number, y: number) =>
   Array.from(png.pixels.subarray((y * png.width + x) * 4, (y * png.width + x) * 4 + 4));
 
@@ -164,32 +164,32 @@ describe("manifest and favicon (REQ-516)", () => {
     const manifest = JSON.parse(readFileSync(join(PUBLIC_DIR, "manifest.webmanifest"), "utf8"));
     expect(manifest.icons).toEqual([
       {
-        src: "icons/icon-192.png",
+        src: "app-icons/icon-192.png",
         sizes: "192x192",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "icons/icon-512.png",
+        src: "app-icons/icon-512.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "icons/icon-192-maskable.png",
+        src: "app-icons/icon-192-maskable.png",
         sizes: "192x192",
         type: "image/png",
         purpose: "maskable",
       },
       {
-        src: "icons/icon-512-maskable.png",
+        src: "app-icons/icon-512-maskable.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",
       },
     ]);
     for (const icon of manifest.icons) {
-      const png = readPng(icon.src.replace("icons/", ""));
+      const png = readPng(icon.src.replace("app-icons/", ""));
       expect(`${png.width}x${png.height}`).toBe(icon.sizes);
     }
   });

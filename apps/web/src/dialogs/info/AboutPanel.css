@@ -39,8 +39,11 @@
   overflow-wrap: anywhere;
 }
 
-/* Licence of the weather data and how Graupel changed them (REQ-478), below the source. */
-.about__data-license {
+/*
+ * Small text below an entry: licence of the weather data and how Graupel changed them (REQ-478), the licence of a map
+ * (REQ-646), the note on GitHub Issues below the source (REQ-855) and how the model chains are chosen (REQ-856).
+ */
+.about__note {
   display: block;
   margin-top: var(--space-1);
   color: var(--color-text-muted);

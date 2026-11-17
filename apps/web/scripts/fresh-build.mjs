@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Builds the website from fresh packages (REQ-718, REQ-721): Vite bundles the dist/ of the workspace packages as it
- * lies, so a site built without them first ships an old core (the preview 3c9d21f showed the run with its month and
- * the unit twice). `freshBuild` builds every workspace package the website depends on (`pnpm --filter
+ * lies, so a site built without them first ships an old core (a build once showed the run with its month and the
+ * unit twice). `freshBuild` builds every workspace package the website depends on (`pnpm --filter
  * "@graupel/web^..." build`, in the order of their dependencies), stops if a dist/ is still older than its sources and
- * only then builds the website. `pnpm package` and `pnpm preview:build` start with it.
+ * only then builds the website. `pnpm package` starts with it.
  *
  * Usage: node scripts/fresh-build.mjs   (builds the packages and the website for the domains, without a commit in the
  *        bundle, REQ-724)
@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 const APP_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 const REPO_DIR = dirname(dirname(APP_DIR));
 
-/** Build-time variable with the commit of a preview build; the Info tab shows it after the version (REQ-724). */
+/** Build-time variable with the commit of the build; the Info tab shows it after the version (REQ-724). */
 export const REVISION_VARIABLE = "VITE_GRAUPEL_REVISION";
 
 /** pnpm arguments that build every workspace package the website depends on, not the website itself. */
@@ -80,8 +80,7 @@ function pnpm(args, env) {
 
 /**
  * Builds the packages, checks their dist/ and builds the website (REQ-718, REQ-721). `revision`: the commit the Info
- * tab names after the version, only for the preview (REQ-724); without it the variable is removed, so a domain build
- * never carries one. `run` and `check` are replaceable for the tests.
+ * tab names after the version (REQ-724); without it the variable is removed, so a release build never carries one. `run` and `check` are replaceable for the tests.
  */
 export function freshBuild({ revision, run = pnpm, check = checkDependencies } = {}) {
   const env = { ...process.env };

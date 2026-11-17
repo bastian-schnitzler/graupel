@@ -161,8 +161,9 @@ test.describe("no sideways overflow on the phone (REQ-566)", () => {
 test.describe("copy and save at the end of the page (REQ-574)", () => {
   // A lower screen with the model chains shown, so the page scrolls: since REQ-608 the chart takes the height the rest
   // of the page leaves on the screen, at least 40 % of it, and where the page fits Safari keeps no room below the footer
-  // (REQ-614).
-  test.use({ viewport: { width: 390, height: 560 } });
+  // (REQ-614). Since REQ-820 the weather chain's cards have no info button beside the model headers and are lower: the
+  // screen is lower again.
+  test.use({ viewport: { width: 390, height: 520 } });
   ownDevice();
 
   test("tapping copy or save in the footer row leaves the page where it is", async ({ page, context }) => {

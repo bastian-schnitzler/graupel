@@ -594,23 +594,11 @@ html.meteogram-fullscreen-open body {
 }
 
 /*
- * No frame around the X (REQ-762): not when the view opens and focuses it, not on a tap or a click, neither the focus
- * ring (outline, box-shadow) nor the touch screen's highlight. Only after a key (`data-keyboard`, FullscreenClose.tsx)
- * a ring of its own in the icon's colour, not the system's blue, shows where the keyboard's focus is.
+ * No frame around the X (REQ-762): the shared rule of the close buttons (`close-button`, global.css, REQ-776). The
+ * element around it does not show the touch screen's highlight either.
  */
-.fullscreen-close,
-.fullscreen-close__button.icon-button {
+.fullscreen-close {
   -webkit-tap-highlight-color: transparent;
-}
-
-.fullscreen-close__button.icon-button:focus {
-  outline: none;
-  box-shadow: none;
-}
-
-.fullscreen-close__button.icon-button[data-keyboard]:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 1px;
 }
 
 /* A target for a finger of at least the size of the other icon buttons (2.5rem), larger than the small icon. */

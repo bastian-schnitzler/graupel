@@ -73,9 +73,13 @@ const weatherChain = (page: Page) =>
   page.locator('[data-region="model-chain"]').getByRole("group", { name: "Weather chain" });
 const popover = (page: Page) => page.getByTestId("model-info-popover");
 
-/** Starts the page; `chain`: with the weather chain card shown (the stored choice of an earlier visit). */
-async function open(page: Page, chain: boolean) {
+/**
+ * Starts the page; `chain`: with the weather chain card shown (the stored choice of an earlier visit). `headers: false`
+ * hides the model headers: on a phone the chain's cards have their info button only then (REQ-820).
+ */
+async function open(page: Page, chain: boolean, headers = true) {
   if (chain) await page.addInitScript(() => window.localStorage.setItem("graupel.showWeatherChain", "true"));
+  if (!headers) await page.addInitScript(() => window.localStorage.setItem("graupel.modelHeaders", "false"));
   await page.goto(APP);
   await expect(meteogram(page).locator("svg.meteogram-svg-integrated")).toBeVisible();
 }
@@ -123,7 +127,8 @@ for (const phone of [false, true]) {
     test("chain card: model (publisher, coverage) with links to the documentation and the homepage", async ({
       page,
     }, testInfo) => {
-      await open(page, true);
+      // On a phone the cards have the info button only without model headers (REQ-820).
+      await open(page, true, !phone);
       const cards = weatherChain(page).locator('[data-testid^="model-card-"]');
       await expect(cards.first()).toBeVisible();
       const ids = await cards.evaluateAll((nodes) =>

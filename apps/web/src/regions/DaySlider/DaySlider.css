@@ -368,6 +368,16 @@
   width: 1.125rem;
   height: 1.125rem;
   color: var(--color-accent);
+}
+
+/*
+ * The symbol turns on the spot (REQ-860): not the picture itself, whose place on a phone or a tablet lies between
+ * pixels and which Safari then turned about another point than it drew it at, so the circle wandered between the
+ * phases; the group inside the picture turns, about the centre of the view box, which is the circle's.
+ */
+.day-slider__loading-icon .icon__turn {
+  transform-box: view-box;
+  transform-origin: 12px 12px;
   animation: day-slider-loading-turn 0.9s linear infinite;
 }
 
@@ -408,7 +418,7 @@ html[data-meteogram-pull] .day-slider__loading:not([data-loading]) {
   opacity: var(--meteogram-pull-progress, 0);
 }
 
-.day-slider__loading:not([data-loading]) .day-slider__loading-icon {
+.day-slider__loading:not([data-loading]) .day-slider__loading-icon .icon__turn {
   transform: rotate(calc(var(--meteogram-pull-progress, 0) * 360deg));
   animation: none;
 }
@@ -434,8 +444,8 @@ html[data-meteogram-pull] .day-slider__loading:not([data-loading]) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .day-slider__loading-icon,
-  .day-slider__loading:not([data-loading]) .day-slider__loading-icon {
+  .day-slider__loading-icon .icon__turn,
+  .day-slider__loading:not([data-loading]) .day-slider__loading-icon .icon__turn {
     transform: none;
     animation: none;
   }

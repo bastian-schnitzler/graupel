@@ -92,8 +92,9 @@ describe("tabs and their settings (REQ-686)", () => {
   it("puts each setting in its tab; the tab Archive only in the installed app", () => {
     expect(SETTINGS_TAB_IDS).toEqual(["design", "start", "models", "meteogram", "archive"]);
     expect(SETTINGS_TABS.map((tab) => tab.id)).toEqual(SETTINGS_TAB_IDS);
+    // REQ-809: hiding the install button only on the website, after colour mode and map.
     expect(layout(environment())).toEqual([
-      ["design", ["colorMode", "map"]],
+      ["design", ["colorMode", "map", "installButton"]],
       ["start", ["startLocation", "daySlider"]],
       ["models", ["modelChain", "modelHeaders"]],
       ["meteogram", ["meteogram"]],
@@ -144,8 +145,8 @@ describe("tabs and their settings (REQ-686)", () => {
     };
 
     expect(controls("Design")).toEqual({
-      headings: ["Colour mode", "Map"],
-      groups: ["Colour mode", "Map"],
+      headings: ["Colour mode", "Map", "Hide the “Install” button"],
+      groups: ["Colour mode", "Map", "Hide the “Install” button"],
       checkboxes: [],
       selects: [],
     });
